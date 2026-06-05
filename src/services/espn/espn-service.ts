@@ -11,7 +11,6 @@ import { withRetry } from '@cyanheads/mcp-ts-core/utils';
 import type { NormalizedGame, NormalizedStanding, NormalizedTeam } from '../types.js';
 
 const ESPN_BASE = 'https://site.api.espn.com';
-const ESPN_V2_BASE = 'https://site.api.espn.com';
 
 /** Maps ESPN status state to normalized status. */
 function mapEspnStatus(state: string, typeName: string): NormalizedGame['status'] {
@@ -290,7 +289,7 @@ export class EspnService {
     params.set('type', '2');
     const query = params.toString() ? `?${params.toString()}` : '';
     // Use /apis/v2/ — /apis/site/v2/standings returns empty children
-    const url = `${ESPN_V2_BASE}/apis/v2/sports/${sport}/${league}/standings${query}`;
+    const url = `${ESPN_BASE}/apis/v2/sports/${sport}/${league}/standings${query}`;
     ctx.log.debug('ESPN standings fetch', { sport, league, season });
 
     const data = await this.fetchJson<{ children?: unknown[] }>(url, ctx);
@@ -320,7 +319,7 @@ export class EspnService {
             name: String(team?.displayName ?? ''),
             abbreviation: String(team?.abbreviation ?? ''),
           },
-          wins: Number(statMap.wins ?? statMap.wins ?? 0) || 0,
+          wins: Number(statMap.wins ?? 0) || 0,
           losses: Number(statMap.losses ?? 0) || 0,
           ties: statMap.ties != null ? Number(statMap.ties) || null : null,
           points: statMap.points != null ? Number(statMap.points) || null : null,

@@ -4,7 +4,6 @@
  */
 
 import { tool, z } from '@cyanheads/mcp-ts-core';
-import { JsonRpcErrorCode } from '@cyanheads/mcp-ts-core/errors';
 import { getEspnService } from '@/services/espn/espn-service.js';
 import { getMlbService } from '@/services/mlb/mlb-service.js';
 import { LEAGUE_ROUTES } from '@/services/types.js';
@@ -103,22 +102,9 @@ export const sportsGetScores = tool('sports_get_scores', {
     reason: z.string().optional().describe('Human-readable note when no games are found.'),
   }),
 
-  errors: [
-    {
-      reason: 'invalid_league',
-      code: JsonRpcErrorCode.InvalidParams,
-      when: 'The league parameter is not in the supported set.',
-      recovery:
-        'Use one of: nfl, nba, mlb, nhl, epl, mls, laliga, bundesliga, seriea, ligue1, ucl, ncaaf, ncaab.',
-    },
-  ],
-
   async handler(input, ctx) {
-    const route = LEAGUE_ROUTES[input.league];
-    if (!route) {
-      throw ctx.fail('invalid_league', `League "${input.league}" is not supported.`);
-    }
-
+    // biome-ignore lint/style/noNonNullAssertion: Zod enum guarantees input.league is always a key in LEAGUE_ROUTES
+    const route = LEAGUE_ROUTES[input.league]!;
     const effectiveDate = input.date ?? new Date().toISOString().slice(0, 10);
     ctx.log.info('Fetching scores', { league: input.league, date: effectiveDate });
 

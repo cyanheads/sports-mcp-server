@@ -7,8 +7,7 @@ import { tool, z } from '@cyanheads/mcp-ts-core';
 import { JsonRpcErrorCode } from '@cyanheads/mcp-ts-core/errors';
 import { getEspnService } from '@/services/espn/espn-service.js';
 import { getMlbService } from '@/services/mlb/mlb-service.js';
-import type { NormalizedStanding } from '@/services/types.js';
-import { LEAGUE_ROUTES } from '@/services/types.js';
+import { LEAGUE_ROUTES, type NormalizedStanding } from '@/services/types.js';
 
 const LEAGUE_ENUM = z.enum([
   'nfl',
@@ -82,13 +81,6 @@ export const sportsGetStandings = tool('sports_get_standings', {
 
   errors: [
     {
-      reason: 'invalid_league',
-      code: JsonRpcErrorCode.InvalidParams,
-      when: 'The league parameter is not in the supported set.',
-      recovery:
-        'Use one of: nfl, nba, mlb, nhl, epl, mls, laliga, bundesliga, seriea, ligue1, ucl, ncaaf, ncaab.',
-    },
-    {
       reason: 'season_not_found',
       code: JsonRpcErrorCode.NotFound,
       when: 'The requested season returned no standings data.',
@@ -97,11 +89,8 @@ export const sportsGetStandings = tool('sports_get_standings', {
   ],
 
   async handler(input, ctx) {
-    const route = LEAGUE_ROUTES[input.league];
-    if (!route) {
-      throw ctx.fail('invalid_league', `League "${input.league}" is not supported.`);
-    }
-
+    // biome-ignore lint/style/noNonNullAssertion: Zod enum guarantees input.league is always a key in LEAGUE_ROUTES
+    const route = LEAGUE_ROUTES[input.league]!;
     ctx.log.info('Fetching standings', { league: input.league, season: input.season });
 
     let standings: NormalizedStanding[];

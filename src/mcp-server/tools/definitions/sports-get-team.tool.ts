@@ -5,6 +5,7 @@
 
 import { tool, z } from '@cyanheads/mcp-ts-core';
 import { JsonRpcErrorCode } from '@cyanheads/mcp-ts-core/errors';
+import { fetchWithTimeout, withRetry } from '@cyanheads/mcp-ts-core/utils';
 import { getEspnService } from '@/services/espn/espn-service.js';
 import { getMlbService } from '@/services/mlb/mlb-service.js';
 import { LEAGUE_ROUTES } from '@/services/types.js';
@@ -155,21 +156,11 @@ export const sportsGetTeam = tool('sports_get_team', {
       when: 'No team matched the provided team_name in the specified league.',
       recovery: 'Use sports_find_team to resolve the team name to a canonical record first.',
     },
-    {
-      reason: 'invalid_league',
-      code: JsonRpcErrorCode.InvalidParams,
-      when: 'The league parameter is not in the supported set.',
-      recovery:
-        'Use one of: nfl, nba, mlb, nhl, epl, mls, laliga, bundesliga, seriea, ligue1, ucl, ncaaf, ncaab.',
-    },
   ],
 
   async handler(input, ctx) {
-    const route = LEAGUE_ROUTES[input.league];
-    if (!route) {
-      throw ctx.fail('invalid_league', `League "${input.league}" is not supported.`);
-    }
-
+    // biome-ignore lint/style/noNonNullAssertion: Zod enum guarantees input.league is always a key in LEAGUE_ROUTES
+    const route = LEAGUE_ROUTES[input.league]!;
     ctx.log.info('Fetching team detail', { league: input.league, team: input.team_name });
     const q = input.team_name.toLowerCase();
     const now = new Date().toISOString().slice(0, 10);
@@ -197,7 +188,6 @@ export const sportsGetTeam = tool('sports_get_team', {
       const fromDate = new Date(Date.now() - 30 * 86400_000).toISOString().slice(0, 10);
       const toDate = new Date(Date.now() + 30 * 86400_000).toISOString().slice(0, 10);
 
-      const { withRetry, fetchWithTimeout } = await import('@cyanheads/mcp-ts-core/utils');
       const schedUrl = `https://statsapi.mlb.com/api/v1/schedule?sportId=1&hydrate=team,linescore&teamId=${team.mlbId}&startDate=${fromDate}&endDate=${toDate}`;
       const schedData = await withRetry(
         async () => {

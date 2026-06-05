@@ -58,7 +58,7 @@ export class TheSportsDbService {
     ctx.log.debug('TSDB team search', { name });
 
     const data = await this.fetchJson<{ teams?: unknown[] | null }>(url, ctx);
-    if (!data.teams || data.teams === null) return [];
+    if (!data.teams) return [];
 
     return data.teams.map((t) => this.normalizeTeam(t as Record<string, unknown>));
   }
@@ -69,7 +69,7 @@ export class TheSportsDbService {
     ctx.log.debug('TSDB team lookup', { tsdbId });
 
     const data = await this.fetchJson<{ teams?: unknown[] | null }>(url, ctx);
-    if (!data.teams || data.teams === null || data.teams.length === 0) return null;
+    if (!data.teams || data.teams.length === 0) return null;
     return this.normalizeTeam(data.teams[0] as Record<string, unknown>);
   }
 
@@ -101,7 +101,7 @@ export class TheSportsDbService {
     ctx.log.debug('TSDB player search', { name });
 
     const data = await this.fetchJson<{ player?: unknown[] | null }>(url, ctx);
-    if (!data.player || data.player === null) return [];
+    if (!data.player) return [];
 
     return data.player.map((p) => this.normalizePlayer(p as Record<string, unknown>));
   }
@@ -115,8 +115,7 @@ export class TheSportsDbService {
 
     // Detect the HTTP 200 error pattern: {"players": "Invalid Player ID passed"}
     if (typeof data.players === 'string') return null;
-    if (!data.players || data.players === null || (data.players as unknown[]).length === 0)
-      return null;
+    if (!data.players || (data.players as unknown[]).length === 0) return null;
 
     return this.normalizePlayer((data.players as unknown[])[0] as Record<string, unknown>);
   }

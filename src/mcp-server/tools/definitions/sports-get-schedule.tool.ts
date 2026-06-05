@@ -5,6 +5,7 @@
 
 import { tool, z } from '@cyanheads/mcp-ts-core';
 import { JsonRpcErrorCode } from '@cyanheads/mcp-ts-core/errors';
+import { fetchWithTimeout, withRetry } from '@cyanheads/mcp-ts-core/utils';
 import { getEspnService } from '@/services/espn/espn-service.js';
 import { getMlbService } from '@/services/mlb/mlb-service.js';
 import { LEAGUE_ROUTES, type NormalizedGame } from '@/services/types.js';
@@ -99,13 +100,6 @@ export const sportsGetSchedule = tool('sports_get_schedule', {
 
   errors: [
     {
-      reason: 'invalid_league',
-      code: JsonRpcErrorCode.InvalidParams,
-      when: 'The league parameter is not in the supported set.',
-      recovery:
-        'Use one of: nfl, nba, mlb, nhl, epl, mls, laliga, bundesliga, seriea, ligue1, ucl, ncaaf, ncaab.',
-    },
-    {
       reason: 'team_not_found',
       code: JsonRpcErrorCode.NotFound,
       when: 'The team_name resolves to no matching team in the league.',
@@ -114,11 +108,8 @@ export const sportsGetSchedule = tool('sports_get_schedule', {
   ],
 
   async handler(input, ctx) {
-    const route = LEAGUE_ROUTES[input.league];
-    if (!route) {
-      throw ctx.fail('invalid_league', `League "${input.league}" is not supported.`);
-    }
-
+    // biome-ignore lint/style/noNonNullAssertion: Zod enum guarantees input.league is always a key in LEAGUE_ROUTES
+    const route = LEAGUE_ROUTES[input.league]!;
     ctx.log.info('Fetching schedule', { league: input.league, team: input.team_name });
 
     let games: NormalizedGame[] = [];
@@ -145,7 +136,6 @@ export const sportsGetSchedule = tool('sports_get_schedule', {
 
         // Fetch schedule for multiple individual dates would be expensive; use date range via MLB API
         const url = `https://statsapi.mlb.com/api/v1/schedule?sportId=1&hydrate=team,linescore&teamId=${team.mlbId}&startDate=${from}&endDate=${to}`;
-        const { withRetry, fetchWithTimeout } = await import('@cyanheads/mcp-ts-core/utils');
         const data = await withRetry(
           async () => {
             const res = await fetchWithTimeout(url, 10_000, ctx, { signal: ctx.signal });
