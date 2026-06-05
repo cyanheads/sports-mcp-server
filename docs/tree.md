@@ -1,6 +1,6 @@
 # sports-mcp-server - Directory Structure
 
-Generated on: 2026-06-05 10:08:08
+Generated on: 2026-06-05 12:35:18
 
 ```text
 sports-mcp-server/
@@ -19,6 +19,7 @@ sports-mcp-server/
 │   ├── extensions.json
 │   └── settings.json
 ├── changelog/
+│   ├── 0.1.x/
 │   └── template.md
 ├── docs/
 │   ├── design.md
@@ -168,6 +169,7 @@ sports-mcp-server/
 ├── biome.json
 ├── bun.lock
 ├── bunfig.toml
+├── CHANGELOG.md
 ├── CLAUDE.md
 ├── devcheck.config.json
 ├── Dockerfile
