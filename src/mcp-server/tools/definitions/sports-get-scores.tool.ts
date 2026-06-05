@@ -37,9 +37,14 @@ export const sportsGetScores = tool('sports_get_scores', {
     league: LEAGUE_ENUM.describe(
       'League identifier. Supported: nfl, nba, mlb, nhl, epl, mls, laliga, bundesliga, seriea, ligue1, ucl, ncaaf, ncaab.',
     ),
-    date: z.string().optional().describe("Date in YYYY-MM-DD format. Omit for today's games."),
+    date: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be in YYYY-MM-DD format.')
+      .optional()
+      .describe("Date in YYYY-MM-DD format. Omit for today's games."),
     team_name: z
       .string()
+      .max(200, 'Team name must be 200 characters or fewer.')
       .optional()
       .describe(
         'Filter results to games involving this team. Fuzzy match on team name or abbreviation.',

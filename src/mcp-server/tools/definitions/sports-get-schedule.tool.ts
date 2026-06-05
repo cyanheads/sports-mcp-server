@@ -40,15 +40,21 @@ export const sportsGetSchedule = tool('sports_get_schedule', {
     ),
     team_name: z
       .string()
+      .max(200, 'Team name must be 200 characters or fewer.')
       .optional()
       .describe(
         'Team name or partial name to filter schedule. Fuzzy match. Omit for league-wide schedule.',
       ),
     date_from: z
       .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be in YYYY-MM-DD format.')
       .optional()
       .describe('Start of date range in YYYY-MM-DD format. Inclusive.'),
-    date_to: z.string().optional().describe('End of date range in YYYY-MM-DD format. Inclusive.'),
+    date_to: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be in YYYY-MM-DD format.')
+      .optional()
+      .describe('End of date range in YYYY-MM-DD format. Inclusive.'),
   }),
 
   output: z.object({

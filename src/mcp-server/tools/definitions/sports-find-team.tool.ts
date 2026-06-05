@@ -38,6 +38,7 @@ export const sportsFindTeam = tool('sports_find_team', {
   input: z.object({
     query: z
       .string()
+      .max(200, 'Team name must be 200 characters or fewer.')
       .describe(
         'Team name or partial name to search for, e.g. "Mariners", "Man United", "Seattle Seahawks".',
       ),

@@ -39,6 +39,7 @@ export const sportsGetStandings = tool('sports_get_standings', {
     ),
     season: z
       .string()
+      .regex(/^\d{4}$/, 'Season must be a 4-digit year, e.g. "2025".')
       .optional()
       .describe('Season year, e.g. "2025". Omit for the current season.'),
   }),

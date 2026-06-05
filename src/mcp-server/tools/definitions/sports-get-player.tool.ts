@@ -18,6 +18,7 @@ export const sportsGetPlayer = tool('sports_get_player', {
   input: z.object({
     player_id: z
       .string()
+      .max(50, 'Player ID must be 50 characters or fewer.')
       .describe(
         'TheSportsDB player ID. Accepts tsdb: prefixed (e.g. tsdb:34185573) or raw numeric string (e.g. 34185573).',
       ),

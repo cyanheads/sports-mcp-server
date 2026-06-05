@@ -39,6 +39,7 @@ export const sportsGetTeam = tool('sports_get_team', {
     ),
     team_name: z
       .string()
+      .max(200, 'Team name must be 200 characters or fewer.')
       .describe('Team name, abbreviation, or city. Fuzzy matched against ESPN/MLB team list.'),
   }),
 

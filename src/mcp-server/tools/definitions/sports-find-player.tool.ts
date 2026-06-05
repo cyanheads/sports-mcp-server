@@ -18,9 +18,11 @@ export const sportsFindPlayer = tool('sports_find_player', {
   input: z.object({
     query: z
       .string()
+      .max(200, 'Player name must be 200 characters or fewer.')
       .describe('Player name or partial name to search, e.g. "Shohei Ohtani", "LeBron", "Messi".'),
     sport: z
       .string()
+      .max(100, 'Sport name must be 100 characters or fewer.')
       .optional()
       .describe(
         'Optional sport filter to narrow results, e.g. "Baseball", "Soccer", "Basketball".',
