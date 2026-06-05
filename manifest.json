@@ -2,8 +2,14 @@
   "manifest_version": "0.3",
   "name": "sports-mcp-server",
   "version": "0.1.0",
-  "description": "",
-  "author": { "name": "" },
+  "description": "Get live scores, schedules, standings, team and player data for NFL, NBA, MLB, NHL, and soccer.",
+  "author": { "name": "cyanheads" },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/cyanheads/sports-mcp-server"
+  },
+  "homepage": "https://github.com/cyanheads/sports-mcp-server#readme",
+  "license": "Apache-2.0",
   "server": {
     "type": "node",
     "entry_point": "dist/index.js",

@@ -1,17 +1,17 @@
 {
-  "name": "sports-mcp-server",
+  "name": "@cyanheads/sports-mcp-server",
   "version": "0.1.0",
-  "description": "",
+  "description": "Get live scores, schedules, standings, team and player data for NFL, NBA, MLB, NHL, soccer, and more via MCP. STDIO or Streamable HTTP.",
   "author": {
-    "name": ""
+    "name": "cyanheads"
   },
-  "homepage": "",
-  "repository": "",
+  "homepage": "https://github.com/cyanheads/sports-mcp-server#readme",
+  "repository": "https://github.com/cyanheads/sports-mcp-server",
   "license": "Apache-2.0",
   "mcpServers": {
-    "sports-mcp-server": {
+    "@cyanheads/sports-mcp-server": {
       "command": "npx",
-      "args": ["-y", "sports-mcp-server"],
+      "args": ["-y", "@cyanheads/sports-mcp-server"],
       "env": {
         "MCP_TRANSPORT_TYPE": "stdio"
       }

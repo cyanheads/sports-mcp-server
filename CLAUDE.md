@@ -11,19 +11,6 @@
 
 ---
 
-## First Session
-
-This project was just scaffolded with `bunx @cyanheads/mcp-ts-core init`. You're holding a production-grade MCP framework with the hard parts already solved — error handling, telemetry, auth, transport, validation, lifecycle. What's missing is the **domain**. Your job: design the tool, resource, and service surface with the user, then implement it as small pure handlers that throw — the framework catches, classifies, and instruments the rest. Design before code; the user's first messages set direction, so wait for them before scaffolding definitions.
-
-> **Remove this section** from CLAUDE.md / AGENTS.md after completing these steps. The skills and conventions below remain — this block is one-time onboarding only.
-
-1. **Get your bearings.** Take stock of the project tree, the skills in `skills/`, and the tools/MCP servers available. Light tool use is fine for context-building — you're mapping the territory, not committing yet.
-2. **Read the framework docs** — `node_modules/@cyanheads/mcp-ts-core/CLAUDE.md` (builders, Context, errors, exports, conventions)
-3. **Run the `setup` skill** — read `skills/setup/SKILL.md` and follow its checklist (project orientation, agent protocol file selection, echo definition cleanup, skill sync)
-4. **Design the server** — read `skills/design-mcp-server/SKILL.md` and work through it with the user to map the domain into tools, resources, and services before scaffolding
-
----
-
 ## What's Next?
 
 When the user asks what's next or needs direction, suggest options based on the current project state. Common next steps:
@@ -60,71 +47,55 @@ Tailor suggestions to what's actually missing or stale — don't recite the full
 
 ```ts
 import { tool, z } from '@cyanheads/mcp-ts-core';
+import { getEspnService } from '@/services/espn/espn-service.js';
+import { LEAGUE_ROUTES } from '@/services/types.js';
 
-export const searchItems = tool('search_items', {
-  description: 'Search inventory items by query.',
-  annotations: { readOnlyHint: true },
+const LEAGUE_ENUM = z.enum(['nfl', 'nba', 'mlb', 'nhl', 'epl', 'mls', 'laliga', 'bundesliga', 'seriea', 'ligue1', 'ucl', 'ncaaf', 'ncaab']);
+
+export const sportsGetStandings = tool('sports_get_standings', {
+  description: 'Current standings or league table for a league and season.',
+  annotations: { readOnlyHint: true, openWorldHint: true },
+
   input: z.object({
-    query: z.string().describe('Search terms'),
-    limit: z.number().default(10).describe('Max results'),
+    league: LEAGUE_ENUM.describe('League identifier.'),
+    season: z.string().optional().describe('Season year (YYYY). Defaults to current season.'),
   }),
+
   output: z.object({
-    items: z.array(z.object({
-      id: z.string().describe('Item ID'),
-      name: z.string().describe('Item name'),
-    })).describe('Matching items'),
+    standings: z.array(z.object({
+      rank: z.number().describe('Position in standings.'),
+      team: z.object({
+        id: z.string().describe('Source-prefixed team ID.'),
+        name: z.string().describe('Full team name.'),
+        abbreviation: z.string().describe('Team abbreviation.'),
+      }).describe('Team identity.'),
+      wins: z.number().describe('Win count.'),
+      losses: z.number().describe('Loss count.'),
+      source: z.enum(['espn', 'mlbstats']).describe('Data source.'),
+    })).describe('Ordered standings entries.'),
   }),
-  auth: ['inventory:read'],
+
+  errors: [
+    { reason: 'invalid_league', code: -32602,
+      when: 'League slug is not in the supported set',
+      recovery: 'Use one of the valid league values in the league enum.' },
+    { reason: 'season_not_found', code: -32001,
+      when: 'Requested season has no standings data',
+      recovery: 'Try the current season by omitting the season parameter.' },
+  ],
 
   async handler(input, ctx) {
-    const items = await findItems(input.query, input.limit);
-    ctx.log.info('Search completed', { query: input.query, count: items.length });
-    return { items };
+    const espn = getEspnService();
+    const route = LEAGUE_ROUTES[input.league];
+    ctx.log.info('Fetching standings', { league: input.league, season: input.season });
+    const standings = await espn.getStandings(route, input.season);
+    return { standings };
   },
 
-  // format() populates content[] — the markdown twin of structuredContent.
-  // Different clients read different surfaces (Claude Code → structuredContent,
-  // Claude Desktop → content[]); both must carry the same data.
-  // Enforced at lint time: every field in `output` must appear in the rendered text.
   format: (result) => [{
     type: 'text',
-    text: result.items.map(i => `**${i.id}**: ${i.name}`).join('\n'),
+    text: result.standings.map(s => `${s.rank}. ${s.team.name} — ${s.wins}W ${s.losses}L`).join('\n'),
   }],
-});
-```
-
-### Resource
-
-```ts
-import { resource, z } from '@cyanheads/mcp-ts-core';
-import { notFound } from '@cyanheads/mcp-ts-core/errors';
-
-export const itemData = resource('inventory://{itemId}', {
-  description: 'Fetch an inventory item by ID.',
-  params: z.object({ itemId: z.string().describe('Item identifier') }),
-  auth: ['inventory:read'],
-  async handler(params, ctx) {
-    const item = await ctx.state.get(`item:${params.itemId}`);
-    if (!item) throw notFound(`Item ${params.itemId} not found`, { itemId: params.itemId });
-    return item;
-  },
-});
-```
-
-### Prompt
-
-```ts
-import { prompt, z } from '@cyanheads/mcp-ts-core';
-
-export const reviewCode = prompt('review_code', {
-  description: 'Review code for issues and best practices.',
-  args: z.object({
-    code: z.string().describe('Code to review'),
-    language: z.string().optional().describe('Programming language'),
-  }),
-  generate: (args) => [
-    { role: 'user', content: { type: 'text', text: `Review this ${args.language ?? ''} code:\n${args.code}` } },
-  ],
 });
 ```
 
@@ -136,15 +107,13 @@ import { z } from '@cyanheads/mcp-ts-core';
 import { parseEnvConfig } from '@cyanheads/mcp-ts-core/config';
 
 const ServerConfigSchema = z.object({
-  apiKey: z.string().describe('External API key'),
-  maxResults: z.coerce.number().default(100),
+  theSportsDbApiKey: z.string().default('3').describe('TheSportsDB API key'),
 });
 
 let _config: z.infer<typeof ServerConfigSchema> | undefined;
 export function getServerConfig() {
   _config ??= parseEnvConfig(ServerConfigSchema, {
-    apiKey: 'MY_API_KEY',
-    maxResults: 'MY_MAX_RESULTS',
+    theSportsDbApiKey: 'THESPORTSDB_API_KEY',
   });
   return _config;
 }
@@ -225,18 +194,24 @@ See framework CLAUDE.md and the `api-errors` skill for the full auto-classificat
 src/
   index.ts                              # createApp() entry point
   config/
-    server-config.ts                    # Server-specific env vars (Zod schema)
+    server-config.ts                    # THESPORTSDB_API_KEY (Zod schema)
   services/
-    [domain]/
-      [domain]-service.ts               # Domain service (init/accessor pattern)
-      types.ts                          # Domain types
+    types.ts                            # Normalized types (NormalizedGame, NormalizedTeam, NormalizedPlayer, NormalizedStanding, LEAGUE_ROUTES)
+    espn/
+      espn-service.ts                   # ESPN site API — scores, schedules, standings, teams
+    mlb/
+      mlb-service.ts                    # MLB StatsAPI — scores, schedules, standings, rosters
+    thesportsdb/
+      thesportsdb-service.ts            # TheSportsDB — player/team search and metadata
   mcp-server/
     tools/definitions/
-      [tool-name].tool.ts               # Tool definitions
-    resources/definitions/
-      [resource-name].resource.ts       # Resource definitions
-    prompts/definitions/
-      [prompt-name].prompt.ts           # Prompt definitions
+      sports-find-player.tool.ts        # Resolve player name → canonical record
+      sports-find-team.tool.ts          # Resolve team name → canonical record + IDs
+      sports-get-player.tool.ts         # Player bio and metadata
+      sports-get-scores.tool.ts         # Live and final scores by league/date
+      sports-get-schedule.tool.ts       # Team or league schedule over a date range
+      sports-get-standings.tool.ts      # League standings by season
+      sports-get-team.tool.ts           # Team detail — roster, recent form, next fixtures
 ```
 
 ---

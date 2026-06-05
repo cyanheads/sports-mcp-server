@@ -1,9 +1,9 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
-  "name": "sports-mcp-server",
-  "description": "",
+  "name": "io.github.cyanheads/sports-mcp-server",
+  "description": "Get live scores, schedules, standings, team and player data for NFL, NBA, MLB, NHL, and soccer.",
   "repository": {
-    "url": "",
+    "url": "https://github.com/cyanheads/sports-mcp-server",
     "source": "github"
   },
   "version": "0.1.0",
@@ -11,8 +11,8 @@
     {
       "registryType": "npm",
       "registryBaseUrl": "https://registry.npmjs.org",
-      "identifier": "sports-mcp-server",
-      "runtimeHint": "node",
+      "identifier": "@cyanheads/sports-mcp-server",
+      "runtimeHint": "bun",
       "version": "0.1.0",
       "packageArguments": [
         {
@@ -25,6 +25,13 @@
         }
       ],
       "environmentVariables": [
+        {
+          "name": "THESPORTSDB_API_KEY",
+          "description": "TheSportsDB API key. Defaults to '3' (free public test key). Replace with a paid key for higher rate limits.",
+          "format": "string",
+          "isRequired": false,
+          "default": "3"
+        },
         {
           "name": "MCP_LOG_LEVEL",
           "description": "Sets the minimum log level for output (e.g., 'debug', 'info', 'warn').",
@@ -40,8 +47,8 @@
     {
       "registryType": "npm",
       "registryBaseUrl": "https://registry.npmjs.org",
-      "identifier": "sports-mcp-server",
-      "runtimeHint": "node",
+      "identifier": "@cyanheads/sports-mcp-server",
+      "runtimeHint": "bun",
       "version": "0.1.0",
       "packageArguments": [
         {
@@ -54,6 +61,13 @@
         }
       ],
       "environmentVariables": [
+        {
+          "name": "THESPORTSDB_API_KEY",
+          "description": "TheSportsDB API key. Defaults to '3' (free public test key). Replace with a paid key for higher rate limits.",
+          "format": "string",
+          "isRequired": false,
+          "default": "3"
+        },
         {
           "name": "MCP_HTTP_HOST",
           "description": "The hostname for the HTTP server.",

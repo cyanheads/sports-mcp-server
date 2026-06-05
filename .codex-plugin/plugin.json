@@ -1,25 +1,25 @@
 {
-  "name": "sports-mcp-server",
+  "name": "@cyanheads/sports-mcp-server",
   "version": "0.1.0",
-  "description": "",
+  "description": "Get live scores, schedules, standings, team and player data for NFL, NBA, MLB, NHL, soccer, and more via MCP. STDIO or Streamable HTTP.",
   "author": {
-    "name": "",
-    "email": "",
-    "url": ""
+    "name": "cyanheads",
+    "email": "casey@caseyjhand.com",
+    "url": "https://github.com/cyanheads"
   },
-  "homepage": "",
-  "repository": "",
+  "homepage": "https://github.com/cyanheads/sports-mcp-server#readme",
+  "repository": "https://github.com/cyanheads/sports-mcp-server",
   "license": "Apache-2.0",
-  "keywords": ["mcp", "mcp-server", "model-context-protocol"],
+  "keywords": ["sports", "nfl", "nba", "mlb", "nhl", "soccer", "scores", "schedules", "standings", "mcp", "mcp-server", "model-context-protocol"],
   "mcpServers": "./.codex-plugin/mcp.json",
   "interface": {
-    "displayName": "sports-mcp-server",
-    "shortDescription": "",
+    "displayName": "@cyanheads/sports-mcp-server",
+    "shortDescription": "Get live scores, schedules, standings, team and player data for NFL, NBA, MLB, NHL, soccer, and more via MCP. STDIO or Streamable HTTP.",
     "longDescription": "",
-    "developerName": "",
-    "category": "",
+    "developerName": "cyanheads",
+    "category": "data",
     "capabilities": ["Read"],
-    "websiteURL": "",
+    "websiteURL": "https://github.com/cyanheads/sports-mcp-server",
     "defaultPrompt": []
   }
 }
