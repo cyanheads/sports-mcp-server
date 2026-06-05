@@ -107,11 +107,27 @@ export class EspnService {
         const competitor = c as Record<string, unknown>;
         const team = competitor.team as Record<string, unknown>;
         const side = competitor.homeAway as string;
+        // Score may be a plain string/number (scoreboard) or an object with displayValue (schedule).
+        const rawScore = competitor.score;
+        let scoreStr: string | null = null;
+        if (rawScore != null) {
+          if (typeof rawScore === 'object') {
+            const scoreObj = rawScore as Record<string, unknown>;
+            scoreStr =
+              scoreObj.displayValue != null
+                ? String(scoreObj.displayValue)
+                : scoreObj.value != null
+                  ? String(scoreObj.value)
+                  : null;
+          } else {
+            scoreStr = String(rawScore);
+          }
+        }
         const entry = {
           id: `espn:${String(team?.id ?? '')}`,
           name: String(team?.displayName ?? team?.name ?? ''),
           abbreviation: String(team?.abbreviation ?? ''),
-          score: competitor.score != null ? String(competitor.score) : null,
+          score: scoreStr,
         };
         if (side === 'home') homeTeam = entry;
         else awayTeam = entry;
@@ -119,7 +135,10 @@ export class EspnService {
 
       if (!homeTeam || !awayTeam) continue;
 
-      const status = e.status as Record<string, unknown> | undefined;
+      // Status may live on e.status (scoreboard) or comp.status (schedule endpoint).
+      const status =
+        (e.status as Record<string, unknown> | undefined) ??
+        (comp.status as Record<string, unknown> | undefined);
       const statusType = status?.type as Record<string, unknown> | undefined;
       const state = String(statusType?.state ?? 'pre');
       const typeName = String(statusType?.name ?? '');

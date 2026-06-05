@@ -76,7 +76,10 @@ export class TheSportsDbService {
   private normalizeTeam(t: Record<string, unknown>): NormalizedTeam {
     return {
       id: `tsdb:${String(t.idTeam ?? '')}`,
-      espnId: t.idESPN != null && String(t.idESPN) !== '' ? String(t.idESPN) : null,
+      espnId:
+        t.idESPN != null && String(t.idESPN) !== '' && String(t.idESPN) !== '0'
+          ? String(t.idESPN)
+          : null,
       mlbId: null,
       tsdbId: String(t.idTeam ?? ''),
       name: String(t.strTeam ?? ''),

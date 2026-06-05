@@ -164,7 +164,23 @@ export class MlbService {
     const url = `${MLB_BASE}/standings?leagueId=103,104&season=${yr}`;
     ctx.log.debug('MLB standings fetch', { season: yr });
 
-    const data = await this.fetchJson<{ records?: unknown[] }>(url, ctx);
+    // Fetch teams in parallel to build an id→abbreviation map.
+    // The standings endpoint omits team abbreviation; the teams endpoint has it.
+    const [data, teamsData] = await Promise.all([
+      this.fetchJson<{ records?: unknown[] }>(url, ctx),
+      this.fetchJson<{ teams?: unknown[] }>(`${MLB_BASE}/teams?sportId=1`, ctx).catch(() => ({
+        teams: [] as unknown[],
+      })),
+    ]);
+
+    const abbrevMap = new Map<string, string>();
+    for (const t of teamsData?.teams ?? []) {
+      const team = t as Record<string, unknown>;
+      if (team.id != null && team.abbreviation != null) {
+        abbrevMap.set(String(team.id), String(team.abbreviation));
+      }
+    }
+
     const records = data?.records ?? [];
     const standings: NormalizedStanding[] = [];
 
@@ -175,13 +191,14 @@ export class MlbService {
       for (const tr of teamRecords) {
         const t = tr as Record<string, unknown>;
         const team = t.team as Record<string, unknown> | undefined;
+        const teamId = String(team?.id ?? '');
 
         standings.push({
           rank: typeof t.divisionRank === 'string' ? parseInt(t.divisionRank, 10) || 0 : 0,
           team: {
-            id: `mlb:${String(team?.id ?? '')}`,
+            id: `mlb:${teamId}`,
             name: String(team?.name ?? ''),
-            abbreviation: String(team?.abbreviation ?? ''),
+            abbreviation: abbrevMap.get(teamId) ?? String(team?.abbreviation ?? ''),
           },
           wins: typeof t.wins === 'number' ? t.wins : parseInt(String(t.wins ?? '0'), 10) || 0,
           losses:
