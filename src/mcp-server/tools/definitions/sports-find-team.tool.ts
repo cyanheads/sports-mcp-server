@@ -112,7 +112,7 @@ export const sportsFindTeam = tool('sports_find_team', {
       results.push(t);
     }
 
-    // 2. ESPN team list search for the given league
+    // 2. ESPN and/or MLB team list search for the given league
     if (input.league) {
       const route = LEAGUE_ROUTES[input.league];
       if (route) {
@@ -134,6 +134,25 @@ export const sportsFindTeam = tool('sports_find_team', {
           // ESPN fetch failure is non-fatal for find_team
           ctx.log.warning('ESPN team list fetch failed during find_team', { league: input.league });
         }
+
+        // For MLB league, also fetch from MLB StatsAPI to obtain mlbId (ESPN teams carry espnId only)
+        if (route.mlbLeagueId) {
+          try {
+            const mlbTeams = await getMlbService().getTeams(null, ctx);
+            for (const t of mlbTeams) {
+              if (
+                t.name.toLowerCase().includes(q) ||
+                t.displayName.toLowerCase().includes(q) ||
+                t.abbreviation.toLowerCase() === q
+              ) {
+                const alreadyInResults = results.some((r) => r.mlbId === t.mlbId && t.mlbId);
+                if (!alreadyInResults) results.push(t);
+              }
+            }
+          } catch {
+            ctx.log.warning('MLB teams fetch failed during find_team');
+          }
+        }
       }
     } else {
       // No league filter — try MLB teams
@@ -154,17 +173,30 @@ export const sportsFindTeam = tool('sports_find_team', {
       }
     }
 
-    // Deduplicate by displayName (case-insensitive)
-    const seen = new Set<string>();
-    const deduped = results.filter((t) => {
+    // Deduplicate by displayName (case-insensitive), merging cross-reference IDs so that
+    // espnId/mlbId/tsdbId from any matching record survive in the canonical output entry.
+    const byName = new Map<string, NormalizedTeam>();
+    for (const t of results) {
       const key = t.displayName.toLowerCase();
-      if (seen.has(key)) return false;
-      seen.add(key);
-      return true;
-    });
+      const existing = byName.get(key);
+      if (!existing) {
+        byName.set(key, { ...t });
+      } else {
+        // Merge IDs — preserve whichever record has a non-null value for each field
+        existing.espnId ??= t.espnId;
+        existing.mlbId ??= t.mlbId;
+        existing.tsdbId ??= t.tsdbId;
+        // Keep the more informative record (ESPN/MLB has venueName; TSDB often has logoUrl)
+        existing.venueName ??= t.venueName;
+        existing.logoUrl ??= t.logoUrl;
+      }
+    }
+    const deduped = [...byName.values()];
 
     if (deduped.length === 0) {
-      throw ctx.fail('no_match', `No team found matching "${input.query}".`);
+      throw ctx.fail('no_match', `No team found matching "${input.query}".`, {
+        ...ctx.recoveryFor('no_match'),
+      });
     }
 
     return {
