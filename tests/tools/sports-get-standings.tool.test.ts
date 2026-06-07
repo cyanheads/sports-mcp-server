@@ -72,15 +72,39 @@ describe('sportsGetStandings', () => {
     expect(mockMlbSvc.getStandings).toHaveBeenCalledWith('2025', ctx);
   });
 
-  it('throws season_not_found when standings array is empty', async () => {
+  it('throws season_not_found when an explicit season returns no standings', async () => {
     mockEspnSvc.getStandings.mockResolvedValue([]);
 
     const ctx = createMockContext({ errors: sportsGetStandings.errors });
     const input = sportsGetStandings.input.parse({ league: 'nfl', season: '1800' });
 
     await expect(sportsGetStandings.handler(input, ctx)).rejects.toMatchObject({
-      data: { reason: 'season_not_found' },
+      data: { reason: 'season_not_found', recovery: { hint: expect.any(String) } },
     });
+  });
+
+  it('returns empty standings with notice for off-season (no season param)', async () => {
+    mockEspnSvc.getStandings.mockResolvedValue([]);
+
+    const ctx = createMockContext({ errors: sportsGetStandings.errors });
+    const input = sportsGetStandings.input.parse({ league: 'epl' });
+    const result = await sportsGetStandings.handler(input, ctx);
+
+    expect(result.standings).toHaveLength(0);
+    expect(result.notice).toMatch(/off-season/i);
+  });
+
+  it('formats off-season notice in content[]', () => {
+    const result = {
+      standings: [],
+      league: 'epl',
+      season: null,
+      source: 'espn' as const,
+      notice: 'Season not currently active — standings are unavailable during the off-season.',
+    };
+    const blocks = sportsGetStandings.format!(result);
+    expect(blocks[0].type).toBe('text');
+    expect(blocks[0].text).toContain('Season not currently active');
   });
 
   it('formats output completely (includes team name, wins, losses, rank)', () => {
