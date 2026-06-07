@@ -25,7 +25,8 @@ export const sportsFindPlayer = tool('sports_find_player', {
       .max(100, 'Sport name must be 100 characters or fewer.')
       .optional()
       .describe(
-        'Optional sport filter to narrow results, e.g. "Baseball", "Soccer", "Basketball".',
+        'Advisory sport hint for disambiguation, e.g. "Baseball", "Soccer", "Basketball". ' +
+          'TheSportsDB does not support server-side sport filtering, so all players matching the query are returned regardless of this value.',
       ),
   }),
 
@@ -89,7 +90,9 @@ export const sportsFindPlayer = tool('sports_find_player', {
     }
 
     if (players.length === 0) {
-      throw ctx.fail('no_match', `No player found matching "${input.query}".`);
+      throw ctx.fail('no_match', `No player found matching "${input.query}".`, {
+        ...ctx.recoveryFor('no_match'),
+      });
     }
 
     return {

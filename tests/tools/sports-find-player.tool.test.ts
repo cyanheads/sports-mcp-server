@@ -57,15 +57,28 @@ describe('sportsFindPlayer', () => {
     expect(result.totalFound).toBe(1);
   });
 
-  it('throws no_match when TheSportsDB returns empty results', async () => {
+  it('throws no_match when TheSportsDB returns empty results, with recovery hint', async () => {
     mockTsdbSvc.searchPlayers.mockResolvedValue([]);
 
     const ctx = createMockContext({ errors: sportsFindPlayer.errors });
     const input = sportsFindPlayer.input.parse({ query: 'ZZZNONEXISTENT' });
 
     await expect(sportsFindPlayer.handler(input, ctx)).rejects.toMatchObject({
-      data: { reason: 'no_match' },
+      data: { reason: 'no_match', recovery: { hint: expect.any(String) } },
     });
+  });
+
+  it('sport parameter is advisory — all players returned regardless of sport value', async () => {
+    const player = makePlayer();
+    mockTsdbSvc.searchPlayers.mockResolvedValue([player]);
+
+    const ctx = createMockContext({ errors: sportsFindPlayer.errors });
+    const input = sportsFindPlayer.input.parse({ query: 'Messi', sport: 'Curling' });
+    const result = await sportsFindPlayer.handler(input, ctx);
+
+    // Sport filter is advisory — Messi is returned even though sport: "Curling"
+    expect(result.players).toHaveLength(1);
+    expect(result.players[0].name).toBe('Shohei Ohtani');
   });
 
   it('handles sparse payload — player with no team or nationality', async () => {
