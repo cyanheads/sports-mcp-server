@@ -68,7 +68,9 @@ export const sportsGetPlayer = tool('sports_get_player', {
     const player = await getTheSportsDbService().lookupPlayer(rawId, ctx);
 
     if (!player) {
-      throw ctx.fail('player_not_found', `No player found with ID "${input.player_id}".`);
+      throw ctx.fail('player_not_found', `No player found with ID "${input.player_id}".`, {
+        ...ctx.recoveryFor('player_not_found'),
+      });
     }
 
     return { player };

@@ -175,7 +175,9 @@ export const sportsGetTeam = tool('sports_get_team', {
           t.abbreviation.toLowerCase() === q,
       );
       if (!team?.mlbId)
-        throw ctx.fail('team_not_found', `No MLB team matching "${input.team_name}".`);
+        throw ctx.fail('team_not_found', `No MLB team matching "${input.team_name}".`, {
+          ...ctx.recoveryFor('team_not_found'),
+        });
 
       const rosterRaw = await getMlbService().getTeamRoster(team.mlbId, null, ctx);
       const roster = rosterRaw.map((p) => ({
@@ -267,7 +269,13 @@ export const sportsGetTeam = tool('sports_get_team', {
         t.location.toLowerCase().includes(q),
     );
     if (!team)
-      throw ctx.fail('team_not_found', `No team matching "${input.team_name}" in ${input.league}.`);
+      throw ctx.fail(
+        'team_not_found',
+        `No team matching "${input.team_name}" in ${input.league}.`,
+        {
+          ...ctx.recoveryFor('team_not_found'),
+        },
+      );
 
     const teamId = team.espnId ?? team.id.replace('espn:', '');
 

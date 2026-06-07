@@ -138,7 +138,9 @@ export const sportsGetSchedule = tool('sports_get_schedule', {
             t.abbreviation.toLowerCase() === q,
         );
         if (!team)
-          throw ctx.fail('team_not_found', `No MLB team found matching "${input.team_name}".`);
+          throw ctx.fail('team_not_found', `No MLB team found matching "${input.team_name}".`, {
+            ...ctx.recoveryFor('team_not_found'),
+          });
 
         // Fetch schedule for multiple individual dates would be expensive; use date range via MLB API
         const url = `https://statsapi.mlb.com/api/v1/schedule?sportId=1&hydrate=team,linescore&teamId=${team.mlbId}&startDate=${from}&endDate=${to}`;
@@ -223,6 +225,7 @@ export const sportsGetSchedule = tool('sports_get_schedule', {
           throw ctx.fail(
             'team_not_found',
             `No team found matching "${input.team_name}" in ${input.league}.`,
+            { ...ctx.recoveryFor('team_not_found') },
           );
         const teamId = team.espnId ?? team.id.replace('espn:', '');
         games = await getEspnService().getTeamSchedule(
