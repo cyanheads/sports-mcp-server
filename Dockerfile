@@ -36,8 +36,11 @@ WORKDIR /usr/src/app
 # production dependencies are installed.
 ENV NODE_ENV=production
 
+ARG APP_VERSION
+
 # OCI image metadata (https://github.com/opencontainers/image-spec/blob/main/annotations.md)
 LABEL org.opencontainers.image.title="sports-mcp-server"
+LABEL org.opencontainers.image.version="${APP_VERSION}"
 LABEL org.opencontainers.image.description="Get live scores, schedules, standings, team and player data for NFL, NBA, MLB, NHL, and soccer."
 LABEL org.opencontainers.image.source="https://github.com/cyanheads/sports-mcp-server"
 LABEL org.opencontainers.image.licenses="Apache-2.0"
@@ -94,6 +97,9 @@ ENV MCP_FORCE_CONSOLE_LOGGING="true"
 
 # Expose the port the server listens on
 EXPOSE ${MCP_HTTP_PORT}
+
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+  CMD bun -e "fetch('http://localhost:'+process.env.MCP_HTTP_PORT+'/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
 
 # The command to start the server
 CMD ["bun", "run", "dist/index.js"]
