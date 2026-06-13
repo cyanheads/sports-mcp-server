@@ -21,6 +21,8 @@ import { initMlbService } from './services/mlb/mlb-service.js';
 import { initTheSportsDbService } from './services/thesportsdb/thesportsdb-service.js';
 
 await createApp({
+  name: 'sports-mcp-server',
+  title: 'sports-mcp-server',
   tools: [
     sportsGetScores,
     sportsGetSchedule,
