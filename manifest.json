@@ -3,7 +3,11 @@
   "name": "sports-mcp-server",
   "version": "0.1.3",
   "description": "Get live scores, schedules, standings, team and player data for NFL, NBA, MLB, NHL, and soccer.",
-  "author": { "name": "cyanheads" },
+  "author": {
+    "name": "Casey Hand",
+    "email": "casey@caseyjhand.com",
+    "url": "https://caseyjhand.com"
+  },
   "repository": {
     "type": "git",
     "url": "https://github.com/cyanheads/sports-mcp-server"

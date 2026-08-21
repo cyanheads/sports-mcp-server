@@ -1,5 +1,5 @@
 {
-  "@cyanheads/sports-mcp-server": {
+  "sports-mcp-server": {
     "command": "npx",
     "args": ["-y", "@cyanheads/sports-mcp-server"],
     "env": {
