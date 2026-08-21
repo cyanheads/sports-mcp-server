@@ -78,13 +78,16 @@ export const sportsGetStandings = tool('sports_get_standings', {
     league: z.string().describe('The league queried.'),
     season: z.string().nullable().describe('The season queried, or null if current.'),
     source: z.enum(['espn', 'mlbstats']).describe('Primary data source used.'),
+  }),
+
+  enrichment: {
     notice: z
       .string()
       .optional()
       .describe(
         'Informational note, e.g. "Season not currently active" when standings are unavailable during the off-season.',
       ),
-  }),
+  },
 
   errors: [
     {
@@ -127,12 +130,14 @@ export const sportsGetStandings = tool('sports_get_standings', {
           { ...ctx.recoveryFor('season_not_found') },
         );
       }
+      ctx.enrich.notice(
+        'Season not currently active — standings are unavailable during the off-season.',
+      );
       return {
         standings: [],
         league: input.league,
         season: null,
         source,
-        notice: 'Season not currently active — standings are unavailable during the off-season.',
       };
     }
 
@@ -149,8 +154,6 @@ export const sportsGetStandings = tool('sports_get_standings', {
     const lines: string[] = [
       `**${result.league.toUpperCase()}${seasonLabel} Standings** (league: ${result.league}, source: ${result.source})\n`,
     ];
-
-    if (result.notice) lines.push(`_${result.notice}_`);
 
     for (const s of result.standings) {
       const tiesStr = s.ties != null ? ` ${s.ties}T` : '';

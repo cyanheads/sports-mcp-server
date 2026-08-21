@@ -83,28 +83,30 @@ describe('sportsGetStandings', () => {
     });
   });
 
-  it('returns empty standings with notice for off-season (no season param)', async () => {
+  it('emits the off-season notice via ctx.enrich (no season param)', async () => {
     mockEspnSvc.getStandings.mockResolvedValue([]);
 
     const ctx = createMockContext({ errors: sportsGetStandings.errors });
+    const enrichSpy = vi.spyOn(ctx.enrich, 'notice');
     const input = sportsGetStandings.input.parse({ league: 'epl' });
     const result = await sportsGetStandings.handler(input, ctx);
 
     expect(result.standings).toHaveLength(0);
-    expect(result.notice).toMatch(/off-season/i);
+    expect(enrichSpy).toHaveBeenCalledWith(expect.stringMatching(/off-season/i));
   });
 
-  it('formats off-season notice in content[]', () => {
-    const result = {
-      standings: [],
-      league: 'epl',
-      season: null,
-      source: 'espn' as const,
-      notice: 'Season not currently active — standings are unavailable during the off-season.',
-    };
-    const blocks = sportsGetStandings.format!(result);
-    expect(blocks[0].type).toBe('text');
-    expect(blocks[0].text).toContain('Season not currently active');
+  it('delivers the off-season notice through the enrichment trailer in content[]', async () => {
+    mockEspnSvc.getStandings.mockResolvedValue([]);
+
+    const { runToolContract } = await import('@cyanheads/mcp-ts-core/testing');
+    const result = await runToolContract(sportsGetStandings, { league: 'epl' });
+
+    expect(result.isError ?? false).toBe(false);
+    const text = result.content.map((b) => (b.type === 'text' ? b.text : '')).join('\n');
+    expect(text).toContain('Season not currently active');
+    expect(result.structuredContent).toMatchObject({
+      notice: expect.stringMatching(/off-season/i),
+    });
   });
 
   it('formats output completely (includes team name, wins, losses, rank)', () => {
