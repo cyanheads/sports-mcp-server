@@ -95,7 +95,7 @@ export const sportsGetPlayer = tool('sports_get_player', {
       lines.push(bio);
     }
 
-    lines.push(`_Source: ${p.source}_`);
+    lines.push(`Source: ${p.source}`);
 
     return [{ type: 'text' as const, text: lines.join('\n') }];
   },
