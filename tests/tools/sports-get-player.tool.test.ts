@@ -43,6 +43,10 @@ describe('sportsGetPlayer', () => {
     );
   });
 
+  it.each(['', '   '])('rejects blank player_id %j', (player_id) => {
+    expect(sportsGetPlayer.input.safeParse({ player_id }).success).toBe(false);
+  });
+
   it('returns player detail for a valid tsdb:-prefixed ID', async () => {
     const player = makePlayer();
     mockTsdbSvc.lookupPlayer.mockResolvedValue(player);
@@ -125,5 +129,19 @@ describe('sportsGetPlayer', () => {
     expect(text).toContain('thesportsdb');
     expect(text).toContain('Los Angeles Dodgers');
     expect(text).toContain('Two-way star');
+  });
+
+  it('preserves a long biography on structured and formatted consumption paths', async () => {
+    const description = 'A'.repeat(1001);
+    mockTsdbSvc.lookupPlayer.mockResolvedValue(makePlayer({ description }));
+
+    const ctx = createMockContext({ errors: sportsGetPlayer.errors });
+    const input = sportsGetPlayer.input.parse({ player_id: 'tsdb:34185573' });
+    const result = await sportsGetPlayer.handler(input, ctx);
+    const blocks = sportsGetPlayer.format!(result);
+
+    expect(result.player.description).toBe(description);
+    expect(blocks[0].text).toContain(description);
+    expect(blocks[0].text).not.toContain(`${'A'.repeat(1000)}…`);
   });
 });

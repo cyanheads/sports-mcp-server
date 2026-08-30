@@ -26,10 +26,7 @@ const LEAGUE_ENUM = z.enum([
 
 export const sportsGetScores = tool('sports_get_scores', {
   description:
-    'Live and final scores for a league on a given date, optionally scoped to a specific team. ' +
-    'Returns each game with home/away teams, current score, status (scheduled/in-progress/final), ' +
-    "period/clock, and UTC start time. Omit date for today's games. " +
-    'Use sports_find_team first to resolve a fuzzy team name before filtering by team_name.',
+    "Live and final scores for a league on a given date, optionally filtered by team name. Returns home and away teams, current score, status, period or clock, and UTC start time. Omit date for today's games.",
 
   annotations: { readOnlyHint: true, openWorldHint: true },
 
@@ -97,7 +94,7 @@ export const sportsGetScores = tool('sports_get_scores', {
             venue: z.string().nullable().describe('Venue name, if available.'),
             source: z
               .enum(['espn', 'mlbstats'])
-              .describe('Data source: espn for all leagues except MLB; mlbstats for MLB.'),
+              .describe('Source provenance for this game record.'),
           })
           .describe('A single game record.'),
       )

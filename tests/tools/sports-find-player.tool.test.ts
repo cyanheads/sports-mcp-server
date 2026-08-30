@@ -43,6 +43,10 @@ describe('sportsFindPlayer', () => {
     );
   });
 
+  it.each(['', '   '])('rejects blank query %j', (query) => {
+    expect(sportsFindPlayer.input.safeParse({ query }).success).toBe(false);
+  });
+
   it('returns matching players from TheSportsDB', async () => {
     const player = makePlayer();
     mockTsdbSvc.searchPlayers.mockResolvedValue([player]);

@@ -9,15 +9,14 @@ import { getTheSportsDbService } from '@/services/thesportsdb/thesportsdb-servic
 
 export const sportsFindPlayer = tool('sports_find_player', {
   description:
-    'Resolve a player name to their canonical record via TheSportsDB. Returns player ID, full name, ' +
-    'current team, position, nationality, birth date, and thumbnail URL. ' +
-    'Use this before sports_get_player to get a valid player_id.',
+    'Resolve a player name to canonical TheSportsDB records with player ID, full name, current team, position, nationality, birth date, and thumbnail URL.',
 
   annotations: { readOnlyHint: true, openWorldHint: true },
 
   input: z.object({
     query: z
       .string()
+      .regex(/\S/, 'Player name must contain at least one non-whitespace character.')
       .max(200, 'Player name must be 200 characters or fewer.')
       .describe('Player name or partial name to search, e.g. "Shohei Ohtani", "LeBron", "Messi".'),
     sport: z
@@ -25,8 +24,7 @@ export const sportsFindPlayer = tool('sports_find_player', {
       .max(100, 'Sport name must be 100 characters or fewer.')
       .optional()
       .describe(
-        'Advisory sport hint for disambiguation, e.g. "Baseball", "Soccer", "Basketball". ' +
-          'TheSportsDB does not support server-side sport filtering, so all players matching the query are returned regardless of this value.',
+        'Advisory sport hint for disambiguation, e.g. "Baseball", "Soccer", or "Basketball". Matching players are returned regardless of this value.',
       ),
   }),
 
@@ -35,11 +33,7 @@ export const sportsFindPlayer = tool('sports_find_player', {
       .array(
         z
           .object({
-            id: z
-              .string()
-              .describe(
-                'TSDB-prefixed player ID, e.g. tsdb:34185573. Pass as player_id to sports_get_player.',
-              ),
+            id: z.string().describe('TSDB-prefixed player ID, e.g. tsdb:34185573.'),
             tsdbId: z.string().describe('TheSportsDB numeric player ID.'),
             name: z.string().describe('Player full name.'),
             team: z.string().nullable().describe('Current team name, or null if not available.'),

@@ -72,6 +72,10 @@ describe('sportsGetTeam', () => {
     vi.mocked(getMlbService).mockReturnValue(mockMlbSvc as ReturnType<typeof getMlbService>);
   });
 
+  it.each(['', '   '])('rejects blank team_name %j', (team_name) => {
+    expect(sportsGetTeam.input.safeParse({ league: 'nfl', team_name }).success).toBe(false);
+  });
+
   it('returns team detail with roster and fixtures (ESPN path)', async () => {
     const team = makeTeam();
     const upcomingGame = makeGame();

@@ -28,8 +28,7 @@ const LEAGUE_ENUM = z.enum([
 
 export const sportsGetTeam = tool('sports_get_team', {
   description:
-    'Team detail: active roster, last 5 results, next 3 upcoming fixtures, venue, and team metadata. ' +
-    'Combines team detail, roster, and schedule data. Use sports_find_team first to confirm the correct team name.',
+    'Team details combining metadata, venue, active roster, the last 5 results, and the next 3 upcoming fixtures.',
 
   annotations: { readOnlyHint: true, openWorldHint: true },
 
@@ -39,6 +38,7 @@ export const sportsGetTeam = tool('sports_get_team', {
     ),
     team_name: z
       .string()
+      .regex(/\S/, 'Team name must contain at least one non-whitespace character.')
       .max(200, 'Team name must be 200 characters or fewer.')
       .describe('Team name, abbreviation, or city. Fuzzy matched against ESPN/MLB team list.'),
   }),

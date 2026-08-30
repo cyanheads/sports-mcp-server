@@ -28,9 +28,7 @@ const LEAGUE_ENUM = z.enum([
 
 export const sportsGetSchedule = tool('sports_get_schedule', {
   description:
-    'Upcoming and past fixtures for a team or full league over a date range. Returns opponent, ' +
-    'home/away flag, UTC date/time, venue, and result if final. Use sports_find_team first to ' +
-    'resolve an ambiguous team name to the canonical form before passing it as team_name.',
+    'Upcoming and past fixtures for a team or full league over a date range, including opponents, home and away teams, UTC start time, venue, and final result when available.',
 
   annotations: { readOnlyHint: true, openWorldHint: true },
 

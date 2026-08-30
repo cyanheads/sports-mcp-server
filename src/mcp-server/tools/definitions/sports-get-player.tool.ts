@@ -9,15 +9,14 @@ import { getTheSportsDbService } from '@/services/thesportsdb/thesportsdb-servic
 
 export const sportsGetPlayer = tool('sports_get_player', {
   description:
-    'Full player detail from TheSportsDB: bio, current team, position, nationality, birth date, ' +
-    'height/weight, career description, and media thumbnail. ' +
-    'Requires a TheSportsDB player ID — use sports_find_player to resolve a player name to a valid player_id first.',
+    'Player details from TheSportsDB, including biography, current team, position, nationality, birth date, height, weight, and thumbnail.',
 
   annotations: { readOnlyHint: true, openWorldHint: true },
 
   input: z.object({
     player_id: z
       .string()
+      .regex(/\S/, 'Player ID must contain at least one non-whitespace character.')
       .max(50, 'Player ID must be 50 characters or fewer.')
       .describe(
         'TheSportsDB player ID. Accepts tsdb: prefixed (e.g. tsdb:34185573) or raw numeric string (e.g. 34185573).',
@@ -90,9 +89,7 @@ export const sportsGetPlayer = tool('sports_get_player', {
 
     if (p.description) {
       lines.push('', '## Bio');
-      // Truncate long descriptions for readability
-      const bio = p.description.length > 1000 ? `${p.description.slice(0, 1000)}…` : p.description;
-      lines.push(bio);
+      lines.push(p.description);
     }
 
     lines.push(`Source: ${p.source}`);

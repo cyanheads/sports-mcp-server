@@ -28,16 +28,14 @@ const LEAGUE_ENUM = z.enum([
 
 export const sportsFindTeam = tool('sports_find_team', {
   description:
-    'Resolve a team name or partial name to its canonical record and source IDs across providers. ' +
-    'Returns full name, league, logo URL, venue, and ESPN/MLB/TheSportsDB IDs. ' +
-    'Use this before any team-scoped query to confirm the correct team name. ' +
-    'Optionally scope to a specific league for faster, more accurate results.',
+    'Resolve a team name or partial name to canonical records and source IDs across providers, optionally scoped to a league. Returns full name, league, logo URL, venue, and ESPN, MLB, and TheSportsDB IDs.',
 
   annotations: { readOnlyHint: true, openWorldHint: true },
 
   input: z.object({
     query: z
       .string()
+      .regex(/\S/, 'Team name must contain at least one non-whitespace character.')
       .max(200, 'Team name must be 200 characters or fewer.')
       .describe(
         'Team name or partial name to search for, e.g. "Mariners", "Man United", "Seattle Seahawks".',

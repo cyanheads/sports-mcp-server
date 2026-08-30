@@ -55,6 +55,10 @@ describe('sportsFindTeam', () => {
     );
   });
 
+  it.each(['', '   '])('rejects blank query %j', (query) => {
+    expect(sportsFindTeam.input.safeParse({ query }).success).toBe(false);
+  });
+
   it('returns matching teams from TheSportsDB', async () => {
     const team = makeTeam();
     mockTsdbSvc.searchTeams.mockResolvedValue([team]);
