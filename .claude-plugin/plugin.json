@@ -1,6 +1,6 @@
 {
   "name": "sports-mcp-server",
-  "version": "0.1.4",
+  "version": "0.2.0",
   "description": "Get live scores, schedules, standings, team and player data for NFL, NBA, MLB, NHL, soccer, and more via MCP. STDIO or Streamable HTTP.",
   "author": {
     "name": "cyanheads"
