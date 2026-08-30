@@ -2,6 +2,10 @@
 
 All notable changes to this project. Each entry links to its full per-version file in [changelog/](changelog/).
 
+## [0.2.0](changelog/0.2.x/0.2.0.md) — 2026-08-30 · ⚠️ Breaking
+
+Required player and team selectors reject whitespace-only input; player biographies remain complete in formatted responses.
+
 ## [0.1.4](changelog/0.1.x/0.1.4.md) — 2026-08-21
 
 MCP SDK v2 serving and strict tool inputs via mcp-ts-core ^0.12.3; standings off-season notice moves to an enrichment trailer; player source-line format parity; TypeScript 7 build; supply-chain guard; community health files
