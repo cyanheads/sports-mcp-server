@@ -1,7 +1,7 @@
 {
   "name": "@cyanheads/sports-mcp-server",
   "mcpName": "io.github.cyanheads/sports-mcp-server",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Get live scores, schedules, standings, team and player data for NFL, NBA, MLB, NHL, soccer, and more via MCP. STDIO or Streamable HTTP.",
   "type": "module",
   "main": "dist/index.js",
