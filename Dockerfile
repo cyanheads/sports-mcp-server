@@ -29,39 +29,17 @@ RUN bun run build
 
 
 # ==============================================================================
-# Production Stage
+# Production Dependencies Stage
 #
-# This stage creates a minimal, optimized, and secure image for running the
-# application. It uses a slim base image and only includes production
-# dependencies and build artifacts.
+# Bun resolves the lockfile and optional OpenTelemetry peers. The final runtime
+# copies only these production dependencies into the Node image.
 # ==============================================================================
-FROM oven/bun:1.4.0-slim AS production
+FROM --platform=$BUILDPLATFORM oven/bun:1.4.0 AS production-dependencies
 
 WORKDIR /usr/src/app
 
-# Set the environment to production for performance and to ensure only
-# production dependencies are installed.
-ENV NODE_ENV=production
-
-ARG APP_VERSION
-
-# OCI image metadata (https://github.com/opencontainers/image-spec/blob/main/annotations.md)
-LABEL org.opencontainers.image.title="sports-mcp-server"
-LABEL org.opencontainers.image.version="${APP_VERSION}"
-LABEL org.opencontainers.image.description="Get live scores, schedules, standings, team and player data for NFL, NBA, MLB, NHL, and soccer."
-LABEL org.opencontainers.image.source="https://github.com/cyanheads/sports-mcp-server"
-LABEL org.opencontainers.image.licenses="Apache-2.0"
-
-# Copy dependency manifests
 COPY package.json bun.lock ./
 
-# Install only production dependencies, ignoring any lifecycle scripts (like 'prepare')
-# that are not needed in the final production image.
-# `--omit=peer` drops the framework's optional peer tiers (test runner, service
-# SDKs, parsers) that Bun would otherwise auto-install. Anything this server
-# actually imports belongs in its own `dependencies`, so nothing needed at
-# runtime is lost. The OTEL step below carries the same flag — without it, that
-# install re-resolves the graph and pulls every optional peer back in.
 RUN --mount=type=cache,target=/root/.bun/install/cache \
     bun install --production --omit=peer --frozen-lockfile --ignore-scripts
 
@@ -83,17 +61,42 @@ RUN --mount=type=cache,target=/root/.bun/install/cache \
         @opentelemetry/semantic-conventions; \
     fi
 
+
+# ==============================================================================
+# Production Stage
+#
+# This stage creates a minimal, optimized, and secure image for running the
+# application. It uses a slim base image and only includes production
+# dependencies and build artifacts.
+# ==============================================================================
+FROM node:24-bookworm-slim AS production
+
+WORKDIR /usr/src/app
+
+# Set the environment to production for performance and to ensure only
+# production dependencies are installed.
+ENV NODE_ENV=production
+
+ARG APP_VERSION
+
+# OCI image metadata (https://github.com/opencontainers/image-spec/blob/main/annotations.md)
+LABEL org.opencontainers.image.title="sports-mcp-server"
+LABEL org.opencontainers.image.version="${APP_VERSION}"
+LABEL org.opencontainers.image.description="Get live scores, schedules, standings, team and player data for NFL, NBA, MLB, NHL, and soccer."
+LABEL org.opencontainers.image.source="https://github.com/cyanheads/sports-mcp-server"
+LABEL org.opencontainers.image.licenses="Apache-2.0"
+
+COPY package.json ./
+COPY --from=production-dependencies /usr/src/app/node_modules ./node_modules
+
 # Copy the compiled application code from the build stage
 COPY --from=build /usr/src/app/dist ./dist
 
-# The 'oven/bun' image already provides a non-root user named 'bun'.
-# We will use this existing user for enhanced security.
-
-# Create and set permissions for the log directory, assigning ownership to the 'bun' user.
-RUN mkdir -p /var/log/sports-mcp-server && chown -R bun:bun /var/log/sports-mcp-server
+# Create and set permissions for the log directory, assigning ownership to the built-in Node user.
+RUN mkdir -p /var/log/sports-mcp-server && chown -R node:node /var/log/sports-mcp-server
 
 # Switch to the non-root user
-USER bun
+USER node
 
 # Define an argument for the port, allowing it to be overridden at build time.
 # The `PORT` variable is often injected by cloud environments at runtime.
@@ -112,8 +115,8 @@ ENV MCP_FORCE_CONSOLE_LOGGING="true"
 # Expose the port the server listens on
 EXPOSE ${MCP_HTTP_PORT}
 
-# Health check using a bun-native fetch (slim image ships no curl/wget)
-HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 CMD bun -e "fetch('http://localhost:'+(process.env.MCP_HTTP_PORT??'3010')+'/healthz').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+# Health check using Node's native fetch (slim image ships no curl/wget)
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 CMD node -e "fetch('http://localhost:'+(process.env.MCP_HTTP_PORT??'3010')+'/healthz').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
 
 # The command to start the server
-CMD ["bun", "run", "dist/index.js"]
+CMD ["node", "dist/index.js"]
