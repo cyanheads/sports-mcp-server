@@ -101,10 +101,15 @@ export const sportsFindTeam = tool('sports_find_team', {
     for (const t of tsdbTeams) {
       if (input.league) {
         // Filter by league if specified — TSDB league name may not match our enum exactly
-        const route = LEAGUE_ROUTES[input.league];
-        const leagueMatch =
-          t.league.toLowerCase().includes(input.league) ||
-          (route && t.league.toLowerCase().includes(route.espnLeague.replace('.', ' ')));
+        // biome-ignore lint/style/noNonNullAssertion: Zod enum guarantees input.league is always a key in LEAGUE_ROUTES
+        const route = LEAGUE_ROUTES[input.league]!;
+        const providerLeague = t.league.toLowerCase();
+        const aliases = [
+          input.league,
+          route.espnLeague.replace('.', ' '),
+          ...(route.theSportsDbLeagueAliases ?? []),
+        ];
+        const leagueMatch = aliases.some((alias) => providerLeague.includes(alias.toLowerCase()));
         if (!leagueMatch) continue;
       }
       results.push(t);

@@ -8,6 +8,7 @@ export interface LeagueRoute {
   espnLeague: string;
   espnSport: string;
   mlbLeagueId: number[] | null;
+  theSportsDbLeagueAliases?: readonly string[];
 }
 
 /** A normalized game record from any source. */
@@ -79,13 +80,43 @@ export const LEAGUE_ROUTES: Record<string, LeagueRoute> = {
   nba: { espnSport: 'basketball', espnLeague: 'nba', mlbLeagueId: null },
   mlb: { espnSport: 'baseball', espnLeague: 'mlb', mlbLeagueId: [103, 104] },
   nhl: { espnSport: 'hockey', espnLeague: 'nhl', mlbLeagueId: null },
-  epl: { espnSport: 'soccer', espnLeague: 'eng.1', mlbLeagueId: null },
+  epl: {
+    espnSport: 'soccer',
+    espnLeague: 'eng.1',
+    mlbLeagueId: null,
+    theSportsDbLeagueAliases: ['English Premier League'],
+  },
   mls: { espnSport: 'soccer', espnLeague: 'usa.1', mlbLeagueId: null },
-  laliga: { espnSport: 'soccer', espnLeague: 'esp.1', mlbLeagueId: null },
-  bundesliga: { espnSport: 'soccer', espnLeague: 'ger.1', mlbLeagueId: null },
-  seriea: { espnSport: 'soccer', espnLeague: 'ita.1', mlbLeagueId: null },
-  ligue1: { espnSport: 'soccer', espnLeague: 'fra.1', mlbLeagueId: null },
-  ucl: { espnSport: 'soccer', espnLeague: 'uefa.champions', mlbLeagueId: null },
+  laliga: {
+    espnSport: 'soccer',
+    espnLeague: 'esp.1',
+    mlbLeagueId: null,
+    theSportsDbLeagueAliases: ['Spanish La Liga'],
+  },
+  bundesliga: {
+    espnSport: 'soccer',
+    espnLeague: 'ger.1',
+    mlbLeagueId: null,
+    theSportsDbLeagueAliases: ['German Bundesliga'],
+  },
+  seriea: {
+    espnSport: 'soccer',
+    espnLeague: 'ita.1',
+    mlbLeagueId: null,
+    theSportsDbLeagueAliases: ['Italian Serie A'],
+  },
+  ligue1: {
+    espnSport: 'soccer',
+    espnLeague: 'fra.1',
+    mlbLeagueId: null,
+    theSportsDbLeagueAliases: ['French Ligue 1'],
+  },
+  ucl: {
+    espnSport: 'soccer',
+    espnLeague: 'uefa.champions',
+    mlbLeagueId: null,
+    theSportsDbLeagueAliases: ['UEFA Champions League'],
+  },
   ncaaf: { espnSport: 'football', espnLeague: 'college-football', mlbLeagueId: null },
   ncaab: { espnSport: 'basketball', espnLeague: 'mens-college-basketball', mlbLeagueId: null },
 };

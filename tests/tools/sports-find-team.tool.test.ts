@@ -179,6 +179,91 @@ describe('sportsFindTeam', () => {
     expect(result.teams[0].tsdbId).toBe('133604');
   });
 
+  it('retains an already-matching Bundesliga TSDB league', async () => {
+    const tsdbTeam = makeTeam({
+      id: 'tsdb:133676',
+      espnId: '132',
+      tsdbId: '133676',
+      name: 'Bayern Munich',
+      displayName: 'Bayern Munich',
+      league: 'German Bundesliga',
+    });
+    mockTsdbSvc.searchTeams.mockResolvedValue([tsdbTeam]);
+    mockEspnSvc.getTeams.mockResolvedValue([]);
+
+    const ctx = createMockContext({ errors: sportsFindTeam.errors });
+    const input = sportsFindTeam.input.parse({ query: 'Bayern Munich', league: 'bundesliga' });
+    const result = await sportsFindTeam.handler(input, ctx);
+
+    expect(result.teams).toHaveLength(1);
+    expect(result.teams[0]).toMatchObject({ tsdbId: '133676', league: 'German Bundesliga' });
+  });
+
+  it.each([
+    {
+      league: 'epl' as const,
+      providerLeague: 'English Premier League',
+      name: 'Arsenal',
+      tsdbId: '133604',
+      espnId: '359',
+    },
+    {
+      league: 'laliga' as const,
+      providerLeague: 'Spanish La Liga',
+      name: 'Real Madrid',
+      tsdbId: '133738',
+      espnId: '86',
+    },
+  ])('retains raw TSDB metadata for $providerLeague', async (fixture) => {
+    const tsdbTeam = makeTeam({
+      id: `tsdb:${fixture.tsdbId}`,
+      espnId: null,
+      tsdbId: fixture.tsdbId,
+      name: fixture.name,
+      displayName: fixture.name,
+      league: fixture.providerLeague,
+      venueName: `${fixture.name} Stadium`,
+    });
+    const espnTeam = makeTeam({
+      id: `espn:${fixture.espnId}`,
+      espnId: fixture.espnId,
+      tsdbId: null,
+      name: fixture.name,
+      displayName: fixture.name,
+      league: fixture.league,
+      venueName: null,
+      source: 'espn',
+    });
+    mockTsdbSvc.searchTeams.mockResolvedValue([tsdbTeam]);
+    mockEspnSvc.getTeams.mockResolvedValue([espnTeam]);
+
+    const ctx = createMockContext({ errors: sportsFindTeam.errors });
+    const input = sportsFindTeam.input.parse({ query: fixture.name, league: fixture.league });
+    const result = await sportsFindTeam.handler(input, ctx);
+
+    expect(result.teams).toHaveLength(1);
+    expect(result.teams[0]).toMatchObject({
+      espnId: fixture.espnId,
+      tsdbId: fixture.tsdbId,
+      venueName: `${fixture.name} Stadium`,
+    });
+  });
+
+  it('excludes a TSDB team from an unrelated league', async () => {
+    mockTsdbSvc.searchTeams.mockResolvedValue([
+      makeTeam({ league: 'National Hockey League', displayName: 'Seattle Kraken' }),
+    ]);
+    mockEspnSvc.getTeams.mockResolvedValue([]);
+    mockMlbSvc.getTeams.mockResolvedValue([]);
+
+    const ctx = createMockContext({ errors: sportsFindTeam.errors });
+    const input = sportsFindTeam.input.parse({ query: 'Seattle Kraken', league: 'mlb' });
+
+    await expect(sportsFindTeam.handler(input, ctx)).rejects.toMatchObject({
+      data: { reason: 'no_match' },
+    });
+  });
+
   it('adds ESPN results when league is specified', async () => {
     // TSDB returns nothing (empty when league filter rejects all results)
     mockTsdbSvc.searchTeams.mockResolvedValue([]);
