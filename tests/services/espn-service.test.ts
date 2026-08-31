@@ -134,4 +134,33 @@ describe('EspnService.normalizeEvents', () => {
     // statusAtEvent: false → status on comp, state: 'pre' → scheduled
     expect(games[0].status).toBe('scheduled');
   });
+
+  it('preserves both bounds in a range scoreboard request', async () => {
+    stubFetch({ events: [makeEvent()] });
+
+    await svc.getScoreboardRange('football', 'nfl', '2026-09-01', '2026-09-30', ctx);
+
+    expect(fetch).toHaveBeenCalledWith(
+      'https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard?dates=20260901-20260930',
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    );
+  });
+
+  it('retries failed range requests through the shared fetch path', async () => {
+    vi.useFakeTimers();
+    vi.mocked(fetch)
+      .mockReset()
+      .mockResolvedValue({ ok: false, status: 503 } as Response);
+
+    try {
+      const rejection = expect(
+        svc.getScoreboardRange('football', 'nfl', '2026-09-01', '2026-09-30', ctx),
+      ).rejects.toThrow('failed after 4 attempts');
+      await vi.runAllTimersAsync();
+      await rejection;
+      expect(fetch).toHaveBeenCalledTimes(4);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });

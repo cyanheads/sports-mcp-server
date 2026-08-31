@@ -62,15 +62,39 @@ export class EspnService {
   }
 
   /** Fetch live/final scoreboard for a sport/league, optionally filtered by date (YYYYMMDD). */
-  async getScoreboard(
+  getScoreboard(
     sport: string,
     league: string,
     date: string | null,
     ctx: Context,
   ): Promise<NormalizedGame[]> {
-    const dateParam = date ? `?dates=${date.replace(/-/g, '')}` : '';
-    const url = `${ESPN_BASE}/apis/site/v2/sports/${sport}/${league}/scoreboard${dateParam}`;
     ctx.log.debug('ESPN scoreboard fetch', { sport, league, date });
+
+    return this.fetchScoreboard(sport, league, date ? date.replace(/-/g, '') : null, ctx);
+  }
+
+  /** Fetch an inclusive league-wide scoreboard range in YYYY-MM-DD format. */
+  getScoreboardRange(
+    sport: string,
+    league: string,
+    dateFrom: string,
+    dateTo: string,
+    ctx: Context,
+  ): Promise<NormalizedGame[]> {
+    const dates = `${dateFrom.replace(/-/g, '')}-${dateTo.replace(/-/g, '')}`;
+    ctx.log.debug('ESPN scoreboard range fetch', { sport, league, dateFrom, dateTo });
+
+    return this.fetchScoreboard(sport, league, dates, ctx);
+  }
+
+  private async fetchScoreboard(
+    sport: string,
+    league: string,
+    dates: string | null,
+    ctx: Context,
+  ): Promise<NormalizedGame[]> {
+    const dateParam = dates ? `?dates=${dates}` : '';
+    const url = `${ESPN_BASE}/apis/site/v2/sports/${sport}/${league}/scoreboard${dateParam}`;
 
     // ESPN returns 400 on bad league slug — treat as validation error
     let data: { events?: unknown[] };

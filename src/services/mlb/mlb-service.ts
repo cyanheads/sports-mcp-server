@@ -57,11 +57,23 @@ export class MlbService {
   }
 
   /** Fetch schedule for a given date (YYYY-MM-DD). Null date returns today. */
-  async getSchedule(date: string | null, ctx: Context): Promise<NormalizedGame[]> {
+  getSchedule(date: string | null, ctx: Context): Promise<NormalizedGame[]> {
     const dateParam = date ? `&date=${date}` : '';
     const url = `${MLB_BASE}/schedule?sportId=1&hydrate=team,linescore,decisions${dateParam}`;
     ctx.log.debug('MLB schedule fetch', { date });
 
+    return this.fetchSchedule(url, ctx);
+  }
+
+  /** Fetch an inclusive league-wide schedule range in YYYY-MM-DD format. */
+  getScheduleRange(dateFrom: string, dateTo: string, ctx: Context): Promise<NormalizedGame[]> {
+    const url = `${MLB_BASE}/schedule?sportId=1&hydrate=team,linescore,decisions&startDate=${dateFrom}&endDate=${dateTo}`;
+    ctx.log.debug('MLB schedule range fetch', { dateFrom, dateTo });
+
+    return this.fetchSchedule(url, ctx);
+  }
+
+  private async fetchSchedule(url: string, ctx: Context): Promise<NormalizedGame[]> {
     const data = await this.fetchJson<{ dates?: unknown[] }>(url, ctx);
     const dates = data?.dates ?? [];
     const games: NormalizedGame[] = [];

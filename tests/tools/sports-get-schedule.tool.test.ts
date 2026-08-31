@@ -58,10 +58,12 @@ describe('sportsGetSchedule', () => {
     getTeams: vi.fn(),
     getTeamSchedule: vi.fn(),
     getScoreboard: vi.fn(),
+    getScoreboardRange: vi.fn(),
   };
   const mockMlbSvc = {
     getTeams: vi.fn(),
     getSchedule: vi.fn(),
+    getScheduleRange: vi.fn(),
   };
 
   beforeEach(() => {
@@ -69,6 +71,13 @@ describe('sportsGetSchedule', () => {
     vi.mocked(getEspnService).mockReturnValue(mockEspnSvc as ReturnType<typeof getEspnService>);
     vi.mocked(getMlbService).mockReturnValue(mockMlbSvc as ReturnType<typeof getMlbService>);
   });
+
+  it.each(['2026/09/01', 'September 1, 2026', '2026-9-1'])(
+    'rejects an invalid date boundary %j',
+    (date_from) => {
+      expect(sportsGetSchedule.input.safeParse({ league: 'nfl', date_from }).success).toBe(false);
+    },
+  );
 
   it('returns league-wide ESPN scoreboard when no team_name given', async () => {
     const game = makeGame();
@@ -80,7 +89,8 @@ describe('sportsGetSchedule', () => {
 
     expect(result.games).toHaveLength(1);
     expect(result.league).toBe('nfl');
-    expect(mockEspnSvc.getScoreboard).toHaveBeenCalled();
+    expect(mockEspnSvc.getScoreboard).toHaveBeenCalledWith('football', 'nfl', null, ctx);
+    expect(mockEspnSvc.getScoreboardRange).not.toHaveBeenCalled();
   });
 
   it('filters to team schedule when team_name given (ESPN path)', async () => {
@@ -112,7 +122,7 @@ describe('sportsGetSchedule', () => {
   it('applies date_from / date_to filter', async () => {
     const earlyGame = makeGame({ startTimeUtc: '2026-05-01T18:00:00Z' });
     const lateGame = makeGame({ id: 'espn:501', startTimeUtc: '2026-09-15T18:00:00Z' });
-    mockEspnSvc.getScoreboard.mockResolvedValue([earlyGame, lateGame]);
+    mockEspnSvc.getScoreboardRange.mockResolvedValue([earlyGame, lateGame]);
 
     const ctx = createMockContext({ errors: sportsGetSchedule.errors });
     const input = sportsGetSchedule.input.parse({
@@ -128,6 +138,61 @@ describe('sportsGetSchedule', () => {
     expect(result.dateTo).toBe('2026-12-31');
   });
 
+  it('fetches and formats an ESPN league-wide paired date range', async () => {
+    const game = makeGame({ startTimeUtc: '2026-09-15T18:00:00Z' });
+    mockEspnSvc.getScoreboardRange.mockResolvedValue([game]);
+
+    const ctx = createMockContext({ errors: sportsGetSchedule.errors });
+    const input = sportsGetSchedule.input.parse({
+      league: 'nfl',
+      date_from: '2026-09-01',
+      date_to: '2026-09-30',
+    });
+    const result = await sportsGetSchedule.handler(input, ctx);
+
+    expect(mockEspnSvc.getScoreboardRange).toHaveBeenCalledWith(
+      'football',
+      'nfl',
+      '2026-09-01',
+      '2026-09-30',
+      ctx,
+    );
+    expect(mockEspnSvc.getScoreboard).not.toHaveBeenCalled();
+    expect(result.games).toEqual([game]);
+    expect(result.totalReturned).toBe(1);
+    expect(sportsGetSchedule.format!(result)[0].text).toContain('SEA @ DAL');
+  });
+
+  it('returns an empty ESPN paired date range through both output paths', async () => {
+    mockEspnSvc.getScoreboardRange.mockResolvedValue([]);
+
+    const ctx = createMockContext({ errors: sportsGetSchedule.errors });
+    const input = sportsGetSchedule.input.parse({
+      league: 'nfl',
+      date_from: '2026-09-01',
+      date_to: '2026-09-30',
+    });
+    const result = await sportsGetSchedule.handler(input, ctx);
+
+    expect(result.games).toEqual([]);
+    expect(result.totalReturned).toBe(0);
+    expect(sportsGetSchedule.format!(result)[0].text).toContain('_0 games_');
+  });
+
+  it.each([{ date_from: '2026-09-01' }, { date_to: '2026-09-30' }])(
+    'keeps the default ESPN fetch for a one-sided range $date_from $date_to',
+    async (bounds) => {
+      mockEspnSvc.getScoreboard.mockResolvedValue([]);
+
+      const ctx = createMockContext({ errors: sportsGetSchedule.errors });
+      const input = sportsGetSchedule.input.parse({ league: 'nfl', ...bounds });
+      await sportsGetSchedule.handler(input, ctx);
+
+      expect(mockEspnSvc.getScoreboard).toHaveBeenCalledWith('football', 'nfl', null, ctx);
+      expect(mockEspnSvc.getScoreboardRange).not.toHaveBeenCalled();
+    },
+  );
+
   it('routes MLB without team_name to mlb service today schedule', async () => {
     mockMlbSvc.getSchedule.mockResolvedValue([]);
 
@@ -135,8 +200,52 @@ describe('sportsGetSchedule', () => {
     const input = sportsGetSchedule.input.parse({ league: 'mlb' });
     const result = await sportsGetSchedule.handler(input, ctx);
 
-    expect(mockMlbSvc.getSchedule).toHaveBeenCalled();
+    expect(mockMlbSvc.getSchedule).toHaveBeenCalledWith(null, ctx);
+    expect(mockMlbSvc.getScheduleRange).not.toHaveBeenCalled();
     expect(result.games).toHaveLength(0);
+  });
+
+  it('fetches an MLB league-wide paired date range', async () => {
+    const game = makeGame({
+      id: 'mlb:1',
+      source: 'mlbstats',
+      startTimeUtc: '2026-07-04T18:00:00Z',
+    });
+    mockMlbSvc.getSchedule.mockResolvedValue([]);
+    mockMlbSvc.getScheduleRange.mockResolvedValue([game]);
+
+    const ctx = createMockContext({ errors: sportsGetSchedule.errors });
+    const input = sportsGetSchedule.input.parse({
+      league: 'mlb',
+      date_from: '2026-07-04',
+      date_to: '2026-07-05',
+    });
+    const result = await sportsGetSchedule.handler(input, ctx);
+
+    expect(mockMlbSvc.getScheduleRange).toHaveBeenCalledWith('2026-07-04', '2026-07-05', ctx);
+    expect(mockMlbSvc.getSchedule).not.toHaveBeenCalled();
+    expect(result.games).toEqual([game]);
+    expect(sportsGetSchedule.format!(result)[0].text).toContain('mlb:1');
+  });
+
+  it('retains late MLB games assigned to the requested provider date', async () => {
+    const lateGame = makeGame({
+      id: 'mlb:late',
+      source: 'mlbstats',
+      startTimeUtc: '2025-07-05T02:05:00Z',
+    });
+    mockMlbSvc.getScheduleRange.mockResolvedValue([lateGame]);
+
+    const ctx = createMockContext({ errors: sportsGetSchedule.errors });
+    const input = sportsGetSchedule.input.parse({
+      league: 'mlb',
+      date_from: '2025-07-04',
+      date_to: '2025-07-04',
+    });
+    const result = await sportsGetSchedule.handler(input, ctx);
+
+    expect(result.games).toEqual([lateGame]);
+    expect(sportsGetSchedule.format!(result)[0].text).toContain('mlb:late');
   });
 
   it('formats output completely', () => {

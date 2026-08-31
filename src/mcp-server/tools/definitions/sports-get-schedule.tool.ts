@@ -117,6 +117,7 @@ export const sportsGetSchedule = tool('sports_get_schedule', {
     ctx.log.info('Fetching schedule', { league: input.league, team: input.team_name });
 
     let games: NormalizedGame[] = [];
+    let providerDateRangeApplied = false;
 
     if (route.mlbLeagueId) {
       // MLB: fetch schedule (no date = today's, we fetch a wider range below)
@@ -126,6 +127,7 @@ export const sportsGetSchedule = tool('sports_get_schedule', {
       const to = input.date_to ?? new Date(Date.now() + 30 * 86400_000).toISOString().slice(0, 10);
 
       if (input.team_name) {
+        providerDateRangeApplied = true;
         // Get teams to find team ID
         const teams = await getMlbService().getTeams(null, ctx);
         const q = input.team_name.toLowerCase();
@@ -204,8 +206,12 @@ export const sportsGetSchedule = tool('sports_get_schedule', {
         }
         games = allGames;
       } else {
-        // No team filter — return today's games
-        games = await getMlbService().getSchedule(null, ctx);
+        if (input.date_from && input.date_to) {
+          providerDateRangeApplied = true;
+          games = await getMlbService().getScheduleRange(input.date_from, input.date_to, ctx);
+        } else {
+          games = await getMlbService().getSchedule(null, ctx);
+        }
       }
     } else {
       // ESPN path: need team ID to fetch team schedule
@@ -234,12 +240,21 @@ export const sportsGetSchedule = tool('sports_get_schedule', {
           ctx,
         );
       } else {
-        games = await getEspnService().getScoreboard(route.espnSport, route.espnLeague, null, ctx);
+        games =
+          input.date_from && input.date_to
+            ? await getEspnService().getScoreboardRange(
+                route.espnSport,
+                route.espnLeague,
+                input.date_from,
+                input.date_to,
+                ctx,
+              )
+            : await getEspnService().getScoreboard(route.espnSport, route.espnLeague, null, ctx);
       }
     }
 
     // Apply date range filter
-    if (input.date_from || input.date_to) {
+    if ((input.date_from || input.date_to) && !providerDateRangeApplied) {
       games = games.filter((g) => {
         const gameDate = g.startTimeUtc.slice(0, 10);
         if (input.date_from && gameDate < input.date_from) return false;
