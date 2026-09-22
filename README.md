@@ -7,7 +7,7 @@
 
 <div align="center">
 
-[![Version](https://img.shields.io/badge/Version-0.2.1-blue.svg?style=flat-square)](./CHANGELOG.md) [![License](https://img.shields.io/badge/License-Apache%202.0-orange.svg?style=flat-square)](./LICENSE) [![Docker](https://img.shields.io/badge/Docker-ghcr.io-2496ED?style=flat-square&logo=docker&logoColor=white)](https://github.com/users/cyanheads/packages/container/package/sports-mcp-server) [![MCP SDK](https://img.shields.io/badge/MCP%20SDK-^2.0.0-green.svg?style=flat-square)](https://modelcontextprotocol.io/) [![npm](https://img.shields.io/npm/v/@cyanheads/sports-mcp-server?style=flat-square&logo=npm&logoColor=white)](https://www.npmjs.com/package/@cyanheads/sports-mcp-server) [![TypeScript](https://img.shields.io/badge/TypeScript-^7.0.2-3178C6.svg?style=flat-square)](https://www.typescriptlang.org/) [![Bun](https://img.shields.io/badge/Bun-v1.3.0%2B-blueviolet.svg?style=flat-square)](https://bun.sh/)
+[![Version](https://img.shields.io/badge/Version-0.2.1-blue.svg?style=flat-square)](./CHANGELOG.md) [![License](https://img.shields.io/badge/License-Apache%202.0-orange.svg?style=flat-square)](./LICENSE) [![Docker](https://img.shields.io/badge/Docker-ghcr.io-2496ED?style=flat-square&logo=docker&logoColor=white)](https://github.com/users/cyanheads/packages/container/package/sports-mcp-server) [![MCP SDK](https://img.shields.io/badge/MCP%20SDK-^2.0.0-green.svg?style=flat-square)](https://modelcontextprotocol.io/) [![npm](https://img.shields.io/npm/v/@cyanheads/sports-mcp-server?style=flat-square&logo=npm&logoColor=white)](https://www.npmjs.com/package/@cyanheads/sports-mcp-server) [![TypeScript](https://img.shields.io/badge/TypeScript-^7.0.2-3178C6.svg?style=flat-square)](https://www.typescriptlang.org/) [![Bun](https://img.shields.io/badge/Bun-v1.4.0%2B-blueviolet.svg?style=flat-square)](https://bun.sh/)
 
 </div>
 
@@ -21,114 +21,100 @@
 
 ---
 
-## Tools
+## Overview
 
-Seven tools organized around what an agent needs — find a team or player, get today's scores, check the schedule, read the standings, or pull full team or player detail:
+Live and historical sports data from ESPN, MLB StatsAPI, and TheSportsDB. Look up teams and players, check scores, schedules, and standings across NFL, NBA, MLB, NHL, and major soccer leagues from any MCP client. Runs as a stdio process or a local Streamable HTTP server.
+
+### Tools
 
 | Tool | Description |
 |:-----|:------------|
-| `sports_find_team` | Resolve a team name or partial name to its canonical record and source IDs. Use before any team-scoped query. |
-| `sports_find_player` | Resolve a player name to their canonical record via TheSportsDB. Disambiguation step before player-scoped queries. |
-| `sports_get_scores` | Live and final scores for a league on a given date, optionally scoped to a specific team. |
+| `sports_find_team` | Resolve a team name or partial name to canonical records and source IDs across providers. |
+| `sports_find_player` | Resolve a player name to canonical TheSportsDB records with ID, team, position, and bio fields. |
+| `sports_get_scores` | Live and final scores for a league on a given date, optionally filtered by team. |
 | `sports_get_schedule` | Upcoming and past fixtures for a team or league over a date range. |
 | `sports_get_standings` | Current standings or league table for a league and season. |
-| `sports_get_team` | Team detail: active roster, last 5 results, next 3 fixtures, venue, and metadata. |
-| `sports_get_player` | Player detail: bio, current team, position, nationality, birth date, height/weight, and thumbnail. |
+| `sports_get_team` | Team detail combining metadata, roster, recent results, and upcoming fixtures. |
+| `sports_get_player` | Player details from TheSportsDB — biography, team, position, and physical stats. |
 
-### `sports_find_team`
+## Capability reference
 
-Resolve a fuzzy team name to its canonical record across ESPN, MLB StatsAPI, and TheSportsDB.
+### `sports_find_team` <sub>tool</sub>
 
-- Returns full name, league, logo URL, venue, and ESPN/MLB/TheSportsDB cross-reference IDs
-- Use before `sports_get_scores`, `sports_get_schedule`, `sports_get_standings`, or `sports_get_team` to get a valid `team_name`
-- Fuzzy match on display name, abbreviation, or location (e.g. "Mariners", "SEA", "Seattle Seahawks")
-
----
-
-### `sports_find_player`
-
-Resolve a player name to their canonical record.
-
-- Multi-sport player search via TheSportsDB
-- Optional `sport` value is an advisory disambiguation hint; matching players are returned regardless of its value
-- Returns player ID, full name, current team, position, nationality, birth date, and thumbnail URL
-- Use the returned `player_id` with `sports_get_player` for full bio detail
+- Free-text `query` (non-whitespace, max 200 characters) with an optional `league` filter to narrow the search
+- Searches TheSportsDB, ESPN, and MLB StatsAPI, then deduplicates matches by display name, merging cross-source IDs into one record
+- Returns full name, abbreviation, location, logo URL, venue, and `espnId`/`mlbId`/`tsdbId` cross-references per match
+- `no_match` error when no team matches the query across any source
 
 ---
 
-### `sports_get_scores`
+### `sports_find_player` <sub>tool</sub>
 
-Live and final scores for a league on a given date.
-
-- Routes NFL/NBA/NHL/soccer → ESPN; MLB → MLB StatsAPI (more authoritative)
-- Returns home/away teams, current score, status (`scheduled`/`in-progress`/`final`), period/clock, and UTC start time
-- Omit `date` for today's games; use `team_name` to filter to one team's game
-- Returns `games: [], reason: '...'` (not an error) when no games are scheduled
+- Free-text `query` (max 200 characters) plus an optional `sport` hint — advisory only, since TheSportsDB has no server-side sport filter and matches return regardless of its value
+- Returns `player_id`, full name, current team, position, nationality, birth date, and thumbnail URL
+- `no_match` error when no player matches in TheSportsDB
 
 ---
 
-### `sports_get_schedule`
+### `sports_get_scores` <sub>tool</sub>
 
-Upcoming and past fixtures for a team or league over a date range.
-
-- Fetches full season from ESPN and applies `date_from`/`date_to` filtering server-side
-- Returns opponent, home/away flag, UTC date/time, venue, and result for completed games
-- Omit `team_name` for the full league calendar; provide it for a single team's fixtures
-
----
-
-### `sports_get_standings`
-
-Current standings or league table for a league and season.
-
-- Returns rank, W/L (or points for soccer/NHL), division/conference, streak, and games behind
-- Omit `season` for the current season; pass a YYYY year for historical standings
-- NHL uses points system (`wins`/`otLosses`/`losses`); soccer returns `points` for the league table
+- `league` required; `date` (YYYY-MM-DD) defaults to today; optional `team_name` filters to one team's game
+- Routes NFL/NBA/NHL/soccer to ESPN, MLB to MLB StatsAPI
+- Returns home/away teams, score, status (`scheduled`/`in-progress`/`final`/`postponed`/`cancelled`), period or clock, and UTC start time
+- No games scheduled returns `games: []` with a `reason` string instead of an error
 
 ---
 
-### `sports_get_team`
+### `sports_get_schedule` <sub>tool</sub>
 
-Composite team detail combining multiple source calls.
+- `league` required; optional `team_name`, and `date_from`/`date_to` (YYYY-MM-DD, inclusive)
+- Fetches from ESPN or MLB StatsAPI depending on league, applying the date range server-side where the provider supports it
+- Returns opponent, home/away score, status, UTC start time, venue, and source per game
+- `team_not_found` error when `team_name` doesn't resolve to a team in the league
 
-- Active roster (or squad), last 5 results, next 3 fixtures, venue, and team metadata
-- MLB teams use MLB StatsAPI for roster and schedule; all others use ESPN
+---
+
+### `sports_get_standings` <sub>tool</sub>
+
+- `league` required; optional `season` (4-digit year) — omit for the current season
+- Returns rank, wins, losses, ties, points (NHL/soccer), winning percentage, division rank, streak, and games behind per team
+- No `season` given and no data available returns empty standings with an enrichment notice instead of an error; an explicit `season` with no data throws `season_not_found`
 
 ---
 
-### `sports_get_player`
+### `sports_get_team` <sub>tool</sub>
 
-Full player profile from TheSportsDB.
-
-- Bio, current team, position, nationality, birth date, height/weight, career description
-- Media thumbnail URL for display
-- Accepts `tsdb:`-prefixed IDs (from `sports_find_player`) or raw numeric TheSportsDB IDs
+- `league` and `team_name` required (fuzzy match on name, abbreviation, or location)
+- Returns team metadata, active roster, up to 5 recent completed results, and up to 3 upcoming fixtures
+- MLB teams source roster and schedule from MLB StatsAPI; all other leagues use ESPN
+- `team_not_found` error when `team_name` doesn't resolve in the league
 
 ---
+
+### `sports_get_player` <sub>tool</sub>
+
+- `player_id` accepts a `tsdb:`-prefixed ID (from `sports_find_player`) or a raw numeric TheSportsDB ID
+- Returns bio, current team, position, nationality, birth date, height, weight, career description, and thumbnail URL
+- `player_not_found` error when the ID doesn't resolve to a player
 
 ## Features
 
-Built on [`@cyanheads/mcp-ts-core`](https://www.npmjs.com/package/@cyanheads/mcp-ts-core):
-
-- Declarative tool definitions — single file per tool, framework handles registration and validation
-- Unified error handling — handlers throw, framework catches, classifies, and formats
-- Pluggable auth: `none`, `jwt`, `oauth`
-- Swappable storage backends: `in-memory`, `filesystem`, `Supabase`, `Cloudflare KV/R2/D1`
-- Structured logging with optional OpenTelemetry tracing
-- STDIO and Streamable HTTP transports
+Built on [`@cyanheads/mcp-ts-core`](https://github.com/cyanheads/mcp-ts-core): stdio and Streamable HTTP transports, pluggable auth (`none` / `jwt` / `oauth`), swappable storage (`in-memory`, `filesystem`, `Supabase`, `Cloudflare KV/R2/D1`), structured logging with optional OpenTelemetry tracing.
 
 Sports-specific:
 
-- Three keyless sources — ESPN site API, MLB StatsAPI, TheSportsDB (free tier key `3`) — no API credentials required
-- League routing table internally routes each query to the best source per sport; agents never reference an upstream API
+- Three keyless sources — ESPN site API, MLB StatsAPI, and TheSportsDB (free tier key `3`) — no required API credentials
+- Internal league routing table sends each query to the best source per sport; callers never reference an upstream API directly
 - Normalized output types across all sources — `NormalizedGame`, `NormalizedTeam`, `NormalizedPlayer`, `NormalizedStanding` — with source provenance on every record
-- Graceful degradation — empty scoreboards (off-season, no games) return `games: []` with a `reason` string, not an error
+- Cross-source team IDs merged onto one canonical record by `sports_find_team`, deduplicated by display name
+- Graceful off-season handling — empty standings return an enrichment notice rather than an error; empty scoreboards return `games: []` with a `reason` string
 
 Agent-friendly output:
 
-- Source provenance on every record — `source: 'espn' | 'mlbstats' | 'thesportsdb'` so agents can reason about data authority
-- Structured `reason` field on empty score responses so agents can explain the result to users
-- Cross-source IDs surfaced by `sports_find_team` — `espnId`, `mlbId`, `tsdbId` — for seamless downstream routing without re-resolving names
+- Source provenance on every record — `source: 'espn' | 'mlbstats' | 'thesportsdb'` — so agents can reason about data authority
+- Structured `reason` field on empty score responses, and an enrichment notice on off-season standings, so agents can explain results without treating them as errors
+- Cross-source IDs surfaced by `sports_find_team` — `espnId`, `mlbId`, `tsdbId` — for downstream routing without re-resolving names
+- Typed error reasons (`no_match`, `team_not_found`, `player_not_found`, `season_not_found`) each carrying an actionable recovery hint
 
 ## Getting started
 
@@ -195,7 +181,7 @@ MCP_TRANSPORT_TYPE=http MCP_HTTP_PORT=3010 bun run start:http
 
 ### Prerequisites
 
-- [Bun v1.3.0](https://bun.sh/) or higher (or Node.js v24+).
+- [Bun v1.4.0](https://bun.sh/) or higher (or Node.js v24+).
 - No API keys required — ESPN and MLB StatsAPI are fully keyless; TheSportsDB ships with a free public test key (`3`).
 
 ### Installation
@@ -232,7 +218,7 @@ cp .env.example .env
 | `THESPORTSDB_API_KEY` | TheSportsDB API key. Replace with a paid key for higher rate limits. | `3` |
 | `MCP_TRANSPORT_TYPE` | Transport: `stdio` or `http`. | `stdio` |
 | `MCP_HTTP_PORT` | Port for HTTP server. | `3010` |
-| `MCP_SESSION_MODE` | HTTP session mode: `auto`, `stateful`, or `stateless`. `auto` resolves to stateful. | `stateless` |
+| `MCP_SESSION_MODE` | HTTP session mode: `stateful`, `stateless`, or `auto` (resolves to stateful). The server declares `stateless` in source; an explicit value here overrides it. | `stateless` |
 | `MCP_AUTH_MODE` | Auth mode: `none`, `jwt`, or `oauth`. | `none` |
 | `MCP_LOG_LEVEL` | Log level (RFC 5424). | `info` |
 | `LOGS_DIR` | Directory for log files (Node.js only). | `<project-root>/logs` |
@@ -298,7 +284,7 @@ See [`CLAUDE.md`/`AGENTS.md`](./CLAUDE.md) for development guidelines and archit
 
 ## Contributing
 
-Issues and pull requests are welcome. Run checks and tests before submitting:
+Issues are welcome. Run checks and tests before submitting:
 
 ```sh
 bun run devcheck
