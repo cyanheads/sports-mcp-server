@@ -34,16 +34,9 @@ await createApp({
   ],
   resources: allResourceDefinitions,
   prompts: allPromptDefinitions,
+  sessionMode: 'stateless',
   instructions:
-    'sports-mcp-server provides live and historical sports data — scores, schedules, standings, ' +
-    'teams, and players — across major leagues via ESPN, MLB StatsAPI, and TheSportsDB.\n\n' +
-    'Supported leagues: nfl, nba, mlb, nhl, epl, mls, laliga, bundesliga, seriea, ligue1, ucl, ncaaf, ncaab.\n\n' +
-    'Typical workflows:\n' +
-    '- "Did the Mariners win?" → sports_get_scores(league:"mlb")\n' +
-    '- "NBA standings" → sports_get_standings(league:"nba")\n' +
-    '- "When does Arsenal play next?" → sports_find_team → sports_get_schedule or sports_get_team\n' +
-    '- "Tell me about Shohei Ohtani" → sports_find_player → sports_get_player\n' +
-    'No API keys required — all sources are keyless (ESPN, MLB) or use the public free tier (TheSportsDB).',
+    "Scores, schedules, standings, and team detail are keyed by league, and the team-scoped tools match team names fuzzily, so call sports_get_scores, sports_get_schedule, sports_get_standings, or sports_get_team directly. Use sports_find_team when a team's league is unknown or you need its ESPN, MLB, and TheSportsDB IDs, and resolve a player with sports_find_player before passing the returned ID to sports_get_player.",
   setup(core) {
     initEspnService(core.config, core.storage);
     initMlbService(core.config, core.storage);
