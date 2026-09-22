@@ -2,6 +2,10 @@
 
 All notable changes to this project. Each entry links to its full per-version file in [changelog/](changelog/).
 
+## [0.2.2](changelog/0.2.x/0.2.2.md) — 2026-09-21
+
+MCP_SESSION_MODE unset or blank now serves stateless via createApp's sessionMode option, and mcp-ts-core moves to ^0.13.6
+
 ## [0.2.1](changelog/0.2.x/0.2.1.md) — 2026-08-30
 
 Provider-aware league schedules and TheSportsDB team metadata fixes.
