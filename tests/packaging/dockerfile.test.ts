@@ -7,10 +7,15 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 const dockerfile = readFileSync(new URL('../../Dockerfile', import.meta.url), 'utf8');
+const { packageManager } = JSON.parse(
+  readFileSync(new URL('../../package.json', import.meta.url), 'utf8'),
+) as { packageManager: string };
 
 describe('Dockerfile', () => {
   it('keeps Bun as the native build-stage runtime', () => {
-    expect(dockerfile).toContain('FROM --platform=$BUILDPLATFORM oven/bun:1.4.0 AS build');
+    expect(dockerfile).toContain(
+      `FROM --platform=$BUILDPLATFORM oven/bun:${packageManager.slice('bun@'.length)} AS build`,
+    );
     expect(dockerfile).toContain('RUN bun run build');
   });
 

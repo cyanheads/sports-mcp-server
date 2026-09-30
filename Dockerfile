@@ -7,7 +7,7 @@
 # aborts under QEMU emulation, which multi-arch builds hit on the non-native
 # builder. The produced JS is architecture-independent.
 # ==============================================================================
-FROM --platform=$BUILDPLATFORM oven/bun:1.4.0 AS build
+FROM --platform=$BUILDPLATFORM oven/bun:1.4.2 AS build
 
 WORKDIR /usr/src/app
 
@@ -31,35 +31,43 @@ RUN bun run build
 # ==============================================================================
 # Production Dependencies Stage
 #
-# Bun resolves the lockfile and optional OpenTelemetry peers. The final runtime
-# copies only these production dependencies into the Node image.
+# Install on the native builder and select dependencies for the target platform.
+# The scanner and OTel installer execute JavaScript, so neither runs under QEMU.
+# The final runtime copies only these production dependencies into the Node image.
 # ==============================================================================
-FROM --platform=$BUILDPLATFORM oven/bun:1.4.0 AS production-dependencies
+FROM --platform=$BUILDPLATFORM oven/bun:1.4.2 AS deps
 
 WORKDIR /usr/src/app
 
-COPY package.json bun.lock ./
+COPY package.json bun.lock bunfig.toml ./
+
+# Seed the configured scanner from the full install; production omits dev deps.
+COPY --from=build /usr/src/app/node_modules/@socketsecurity/bun-security-scanner ./node_modules/@socketsecurity/bun-security-scanner
+
+ARG TARGETOS
+ARG TARGETARCH
+RUN case "$TARGETARCH" in \
+      amd64) echo x64 ;; \
+      arm64) echo arm64 ;; \
+      *) echo "Unsupported TARGETARCH '$TARGETARCH': expected amd64 or arm64" >&2; exit 1 ;; \
+    esac > .bun-cpu
 
 RUN --mount=type=cache,target=/root/.bun/install/cache \
-    bun install --production --omit=peer --frozen-lockfile --ignore-scripts
+    bun install --production --omit=peer --frozen-lockfile --ignore-scripts \
+      --os="$TARGETOS" --cpu="$(cat .bun-cpu)"
 
 # Conditionally install OpenTelemetry optional peer dependencies (Tier 3).
-# These are not bundled by default to keep the base image lean. Enable at build time
-# with: docker build --build-arg OTEL_ENABLED=true
+# Installed by default at the framework's peer ranges. Omit them with
+# docker build --build-arg OTEL_ENABLED=false
+COPY scripts/install-otel.ts ./scripts/
 ARG OTEL_ENABLED=true
 RUN --mount=type=cache,target=/root/.bun/install/cache \
     if [ "$OTEL_ENABLED" = "true" ]; then \
-      bun add --omit=dev --omit=peer --ignore-scripts @hono/otel \
-        @opentelemetry/instrumentation-http \
-        @opentelemetry/exporter-metrics-otlp-http \
-        @opentelemetry/exporter-trace-otlp-http \
-        @opentelemetry/instrumentation-pino \
-        @opentelemetry/resources \
-        @opentelemetry/sdk-metrics \
-        @opentelemetry/sdk-node \
-        @opentelemetry/sdk-trace-node \
-        @opentelemetry/semantic-conventions; \
+      bun scripts/install-otel.ts --os="$TARGETOS" --cpu="$(cat .bun-cpu)"; \
     fi
+
+# The scanner is needed only while installing dependencies.
+RUN rm -rf node_modules/@socketsecurity/bun-security-scanner
 
 
 # ==============================================================================
@@ -87,7 +95,7 @@ LABEL org.opencontainers.image.source="https://github.com/cyanheads/sports-mcp-s
 LABEL org.opencontainers.image.licenses="Apache-2.0"
 
 COPY package.json ./
-COPY --from=production-dependencies /usr/src/app/node_modules ./node_modules
+COPY --from=deps /usr/src/app/node_modules ./node_modules
 
 # Copy the compiled application code from the build stage
 COPY --from=build /usr/src/app/dist ./dist
@@ -110,7 +118,6 @@ ENV MCP_TRANSPORT_TYPE="http"
 ENV MCP_SESSION_MODE="stateless"
 ENV MCP_LOG_LEVEL="info"
 ENV LOGS_DIR="/var/log/sports-mcp-server"
-ENV MCP_FORCE_CONSOLE_LOGGING="true"
 
 # Expose the port the server listens on
 EXPOSE ${MCP_HTTP_PORT}
