@@ -2,6 +2,10 @@
 
 All notable changes to this project. Each entry links to its full per-version file in [changelog/](changelog/).
 
+## [0.2.3](changelog/0.2.x/0.2.3.md) — 2026-09-30
+
+ESPN, MLB StatsAPI, and TheSportsDB requests now abort stalled responses at 10 seconds per attempt within a 30-second retry budget, and upstream HTTP errors keep their status-mapped codes instead of collapsing to ServiceUnavailable or an unknown-league error.
+
 ## [0.2.2](changelog/0.2.x/0.2.2.md) — 2026-09-21
 
 MCP_SESSION_MODE unset or blank now serves stateless via createApp's sessionMode option, and mcp-ts-core moves to ^0.13.6
