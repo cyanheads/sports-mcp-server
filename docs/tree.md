@@ -1,6 +1,6 @@
 # sports-mcp-server - Directory Structure
 
-Generated on: 2026-09-22 03:51:12
+Generated on: 2026-09-30 09:27:49
 
 ```text
 sports-mcp-server/
@@ -128,6 +128,7 @@ sports-mcp-server/
 │   ├── clean-mcpb.ts
 │   ├── clean.ts
 │   ├── devcheck.ts
+│   ├── install-otel.ts
 │   ├── lint-mcp.ts
 │   ├── lint-packaging.ts
 │   ├── list-skills.ts
@@ -144,15 +145,16 @@ sports-mcp-server/
 │   │   │   └── definitions/
 │   │   │       └── index.ts
 │   │   └── tools/
-│   │       └── definitions/
-│   │           ├── index.ts
-│   │           ├── sports-find-player.tool.ts
-│   │           ├── sports-find-team.tool.ts
-│   │           ├── sports-get-player.tool.ts
-│   │           ├── sports-get-schedule.tool.ts
-│   │           ├── sports-get-scores.tool.ts
-│   │           ├── sports-get-standings.tool.ts
-│   │           └── sports-get-team.tool.ts
+│   │       ├── definitions/
+│   │       │   ├── index.ts
+│   │       │   ├── sports-find-player.tool.ts
+│   │       │   ├── sports-find-team.tool.ts
+│   │       │   ├── sports-get-player.tool.ts
+│   │       │   ├── sports-get-schedule.tool.ts
+│   │       │   ├── sports-get-scores.tool.ts
+│   │       │   ├── sports-get-standings.tool.ts
+│   │       │   └── sports-get-team.tool.ts
+│   │       └── formatting.ts
 │   ├── services/
 │   │   ├── espn/
 │   │   │   └── espn-service.ts
@@ -160,6 +162,8 @@ sports-mcp-server/
 │   │   │   └── mlb-service.ts
 │   │   ├── thesportsdb/
 │   │   │   └── thesportsdb-service.ts
+│   │   ├── fetch-provider-text.ts
+│   │   ├── provider-errors.ts
 │   │   └── types.ts
 │   └── index.ts
 ├── tests/
@@ -169,8 +173,12 @@ sports-mcp-server/
 │   ├── resources/
 │   ├── services/
 │   │   ├── espn-service.test.ts
-│   │   └── mlb-service.test.ts
+│   │   ├── mlb-enrichment.test.ts
+│   │   ├── mlb-service.test.ts
+│   │   ├── provider-requests.test.ts
+│   │   └── thesportsdb-service.test.ts
 │   ├── tools/
+│   │   ├── formatting.test.ts
 │   │   ├── sports-find-player.tool.test.ts
 │   │   ├── sports-find-team.tool.test.ts
 │   │   ├── sports-get-player.tool.test.ts
