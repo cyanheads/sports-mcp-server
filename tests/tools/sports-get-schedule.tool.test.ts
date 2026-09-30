@@ -3,7 +3,7 @@
  * @module tests/tools/sports-get-schedule.tool.test
  */
 
-import { createMockContext } from '@cyanheads/mcp-ts-core/testing';
+import { createMockContext, runToolContract } from '@cyanheads/mcp-ts-core/testing';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { NormalizedGame, NormalizedTeam } from '@/services/types.js';
 
@@ -263,5 +263,47 @@ describe('sportsGetSchedule', () => {
     expect(text).toContain('DAL');
     expect(text).toContain('final');
     expect(text).toContain('espn');
+  });
+
+  it('carries team_not_found recovery on both client surfaces', async () => {
+    mockEspnSvc.getTeams.mockResolvedValue([]);
+    const result = await runToolContract(sportsGetSchedule, {
+      league: 'nfl',
+      team_name: 'Missing',
+    });
+    expect(result.structuredContent).toMatchObject({
+      error: {
+        data: {
+          reason: 'team_not_found',
+          recovery: { hint: expect.stringContaining('sports_find_team') },
+        },
+      },
+    });
+    expect(JSON.stringify(result.content)).toContain('Recovery:');
+  });
+
+  it.each([{ date_from: '2026-09-01' }, { date_to: '2026-09-30' }])(
+    'keeps the default MLB fetch for one-sided bounds %j',
+    async (bounds) => {
+      mockMlbSvc.getSchedule.mockResolvedValue([]);
+      const ctx = createMockContext({ errors: sportsGetSchedule.errors });
+      await sportsGetSchedule.handler(
+        sportsGetSchedule.input.parse({ league: 'mlb', ...bounds }),
+        ctx,
+      );
+      expect(mockMlbSvc.getSchedule).toHaveBeenCalledWith(null, ctx);
+      expect(mockMlbSvc.getScheduleRange).not.toHaveBeenCalled();
+    },
+  );
+
+  it('treats a blank optional team name as an unfiltered schedule', async () => {
+    mockEspnSvc.getScoreboard.mockResolvedValue([]);
+    const ctx = createMockContext({ errors: sportsGetSchedule.errors });
+    const result = await sportsGetSchedule.handler(
+      sportsGetSchedule.input.parse({ league: 'nfl', team_name: '' }),
+      ctx,
+    );
+    expect(mockEspnSvc.getScoreboard).toHaveBeenCalledWith('football', 'nfl', null, ctx);
+    expect(result.teamFilter).toBeUndefined();
   });
 });

@@ -5,10 +5,12 @@
 
 import { tool, z } from '@cyanheads/mcp-ts-core';
 import { JsonRpcErrorCode } from '@cyanheads/mcp-ts-core/errors';
-import { fetchWithTimeout, withRetry } from '@cyanheads/mcp-ts-core/utils';
+import { withRetry } from '@cyanheads/mcp-ts-core/utils';
 import { getEspnService } from '@/services/espn/espn-service.js';
+import { fetchProviderText } from '@/services/fetch-provider-text.js';
 import { getMlbService } from '@/services/mlb/mlb-service.js';
 import { LEAGUE_ROUTES } from '@/services/types.js';
+import { inline } from '../formatting.js';
 
 const LEAGUE_ENUM = z.enum([
   'nfl',
@@ -175,9 +177,7 @@ export const sportsGetTeam = tool('sports_get_team', {
           t.abbreviation.toLowerCase() === q,
       );
       if (!team?.mlbId)
-        throw ctx.fail('team_not_found', `No MLB team matching "${input.team_name}".`, {
-          ...ctx.recoveryFor('team_not_found'),
-        });
+        throw ctx.fail('team_not_found', `No MLB team matching "${input.team_name}".`);
 
       const rosterRaw = await getMlbService().getTeamRoster(team.mlbId, null, ctx);
       const roster = rosterRaw.map((p) => ({
@@ -193,11 +193,17 @@ export const sportsGetTeam = tool('sports_get_team', {
 
       const schedUrl = `https://statsapi.mlb.com/api/v1/schedule?sportId=1&hydrate=team,linescore&teamId=${team.mlbId}&startDate=${fromDate}&endDate=${toDate}`;
       const schedData = await withRetry(
-        async () => {
-          const res = await fetchWithTimeout(schedUrl, 10_000, ctx, { signal: ctx.signal });
-          return res.json() as Promise<{ dates?: unknown[] }>;
+        async (attempt) => {
+          const text = await fetchProviderText(schedUrl, ctx, attempt);
+          return JSON.parse(text) as { dates?: unknown[] };
         },
-        { operation: 'mlb-team-sched-for-get-team', context: ctx, baseDelayMs: 1000 },
+        {
+          operation: 'mlb-team-sched-for-get-team',
+          context: ctx,
+          baseDelayMs: 1000,
+          signal: ctx.signal,
+          deadlineMs: 30_000,
+        },
       );
 
       const teamGames = [];
@@ -269,13 +275,7 @@ export const sportsGetTeam = tool('sports_get_team', {
         t.location.toLowerCase().includes(q),
     );
     if (!team)
-      throw ctx.fail(
-        'team_not_found',
-        `No team matching "${input.team_name}" in ${input.league}.`,
-        {
-          ...ctx.recoveryFor('team_not_found'),
-        },
-      );
+      throw ctx.fail('team_not_found', `No team matching "${input.team_name}" in ${input.league}.`);
 
     const teamId = team.espnId ?? team.id.replace('espn:', '');
 
@@ -301,17 +301,17 @@ export const sportsGetTeam = tool('sports_get_team', {
   format: (result) => {
     const t = result.team;
     const lines: string[] = [
-      `# ${t.displayName} (${t.name})`,
-      `**Abbrev:** ${t.abbreviation} | **Location:** ${t.location} | **League:** ${t.league}`,
-      `**Venue:** ${t.venueName ?? 'N/A'} | **Source:** ${t.source}`,
-      `**IDs:** primary=${t.id} espn=${t.espnId ?? 'N/A'} mlb=${t.mlbId ?? 'N/A'} tsdb=${t.tsdbId ?? 'N/A'}`,
-      t.logoUrl ? `**Logo:** ${t.logoUrl}` : '',
+      inline`# ${t.displayName} (${t.name})`,
+      inline`**Abbrev:** ${t.abbreviation} | **Location:** ${t.location} | **League:** ${t.league}`,
+      inline`**Venue:** ${t.venueName ?? 'N/A'} | **Source:** ${t.source}`,
+      inline`**IDs:** primary=${t.id} espn=${t.espnId ?? 'N/A'} mlb=${t.mlbId ?? 'N/A'} tsdb=${t.tsdbId ?? 'N/A'}`,
+      t.logoUrl ? inline`**Logo:** ${t.logoUrl}` : '',
       '',
       `## Roster (${result.roster.length} players)`,
     ];
 
     for (const p of result.roster) {
-      lines.push(`- ${p.jersey ? `#${p.jersey} ` : ''}**${p.name}** (${p.position})`);
+      lines.push(inline`- ${p.jersey ? `#${p.jersey} ` : ''}**${p.name}** (${p.position})`);
     }
 
     lines.push('', '## Last 5 Results');
@@ -319,14 +319,14 @@ export const sportsGetTeam = tool('sports_get_team', {
       lines.push('_No recent results available._');
     } else {
       for (const g of result.recentResults) {
-        lines.push(`**${g.shortName}** [${g.id}] — ${g.status} | Start: ${g.startTimeUtc}`);
+        lines.push(inline`**${g.shortName}** [${g.id}] — ${g.status} | Start: ${g.startTimeUtc}`);
         lines.push(
-          `  Away: ${g.awayTeam.name} (${g.awayTeam.abbreviation}) [${g.awayTeam.id}] ${g.awayTeam.score ?? '—'}`,
+          inline`  Away: ${g.awayTeam.name} (${g.awayTeam.abbreviation}) [${g.awayTeam.id}] ${g.awayTeam.score ?? '—'}`,
         );
         lines.push(
-          `  Home: ${g.homeTeam.name} (${g.homeTeam.abbreviation}) [${g.homeTeam.id}] ${g.homeTeam.score ?? '—'}`,
+          inline`  Home: ${g.homeTeam.name} (${g.homeTeam.abbreviation}) [${g.homeTeam.id}] ${g.homeTeam.score ?? '—'}`,
         );
-        lines.push(`  Source: ${g.source}`);
+        lines.push(inline`  Source: ${g.source}`);
       }
     }
 
@@ -335,14 +335,14 @@ export const sportsGetTeam = tool('sports_get_team', {
       lines.push('_No upcoming fixtures available._');
     } else {
       for (const g of result.upcomingFixtures) {
-        lines.push(`**${g.shortName}** [${g.id}] — ${g.status} | Start: ${g.startTimeUtc}`);
+        lines.push(inline`**${g.shortName}** [${g.id}] — ${g.status} | Start: ${g.startTimeUtc}`);
         lines.push(
-          `  Away: ${g.awayTeam.name} (${g.awayTeam.abbreviation}) [${g.awayTeam.id}] ${g.awayTeam.score ?? '—'}`,
+          inline`  Away: ${g.awayTeam.name} (${g.awayTeam.abbreviation}) [${g.awayTeam.id}] ${g.awayTeam.score ?? '—'}`,
         );
         lines.push(
-          `  Home: ${g.homeTeam.name} (${g.homeTeam.abbreviation}) [${g.homeTeam.id}] ${g.homeTeam.score ?? '—'}`,
+          inline`  Home: ${g.homeTeam.name} (${g.homeTeam.abbreviation}) [${g.homeTeam.id}] ${g.homeTeam.score ?? '—'}`,
         );
-        lines.push(`  Source: ${g.source}`);
+        lines.push(inline`  Source: ${g.source}`);
       }
     }
 

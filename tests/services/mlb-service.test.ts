@@ -15,10 +15,7 @@ describe('MlbService', () => {
   const svc = new MlbService();
 
   it('preserves both bounds in a range schedule request', async () => {
-    vi.mocked(fetch).mockResolvedValueOnce({
-      ok: true,
-      text: async () => JSON.stringify({ dates: [] }),
-    } as Response);
+    vi.mocked(fetch).mockResolvedValueOnce(Response.json({ dates: [] }));
 
     const games = await svc.getScheduleRange('2026-07-04', '2026-07-05', ctx);
 
@@ -33,7 +30,7 @@ describe('MlbService', () => {
     vi.useFakeTimers();
     vi.mocked(fetch)
       .mockReset()
-      .mockResolvedValue({ ok: false, status: 503 } as Response);
+      .mockImplementation(async () => new Response('unavailable', { status: 503 }));
 
     try {
       const rejection = expect(

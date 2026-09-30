@@ -8,6 +8,8 @@ import type { AppConfig } from '@cyanheads/mcp-ts-core/config';
 import { serviceUnavailable } from '@cyanheads/mcp-ts-core/errors';
 import type { StorageService } from '@cyanheads/mcp-ts-core/storage';
 import { withRetry } from '@cyanheads/mcp-ts-core/utils';
+import { fetchProviderText } from '../fetch-provider-text.js';
+import { rethrowTerminalProviderError } from '../provider-errors.js';
 import type { NormalizedGame, NormalizedStanding, NormalizedTeam } from '../types.js';
 
 const MLB_BASE = 'https://statsapi.mlb.com/api/v1';
@@ -26,19 +28,8 @@ function mapMlbStatus(abstractState: string, detailedState: string): NormalizedG
 export class MlbService {
   private fetchJson<T>(url: string, ctx: Context): Promise<T> {
     return withRetry(
-      async () => {
-        const controller = new AbortController();
-        const timer = setTimeout(() => controller.abort(), 10_000);
-        let response: Response;
-        try {
-          response = await fetch(url, { signal: ctx.signal ?? controller.signal });
-        } finally {
-          clearTimeout(timer);
-        }
-        if (!response.ok) {
-          throw serviceUnavailable(`MLB StatsAPI returned HTTP ${response.status}`);
-        }
-        const text = await response.text();
+      async (attempt) => {
+        const text = await fetchProviderText(url, ctx, attempt);
         if (/^\s*<(!DOCTYPE\s+html|html[\s>])/i.test(text)) {
           throw serviceUnavailable('MLB StatsAPI returned HTML instead of JSON.');
         }
@@ -52,6 +43,7 @@ export class MlbService {
         operation: 'MlbService.fetchJson',
         baseDelayMs: 1000,
         signal: ctx.signal,
+        deadlineMs: 30_000,
       },
     );
   }
@@ -180,9 +172,12 @@ export class MlbService {
     // The standings endpoint omits team abbreviation; the teams endpoint has it.
     const [data, teamsData] = await Promise.all([
       this.fetchJson<{ records?: unknown[] }>(url, ctx),
-      this.fetchJson<{ teams?: unknown[] }>(`${MLB_BASE}/teams?sportId=1`, ctx).catch(() => ({
-        teams: [] as unknown[],
-      })),
+      this.fetchJson<{ teams?: unknown[] }>(`${MLB_BASE}/teams?sportId=1`, ctx).catch(
+        (error: unknown) => {
+          rethrowTerminalProviderError(error, ctx);
+          return { teams: [] as unknown[] };
+        },
+      ),
     ]);
 
     const abbrevMap = new Map<string, string>();

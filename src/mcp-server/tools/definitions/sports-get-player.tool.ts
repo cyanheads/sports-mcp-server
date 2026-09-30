@@ -6,6 +6,7 @@
 import { tool, z } from '@cyanheads/mcp-ts-core';
 import { JsonRpcErrorCode } from '@cyanheads/mcp-ts-core/errors';
 import { getTheSportsDbService } from '@/services/thesportsdb/thesportsdb-service.js';
+import { inline } from '../formatting.js';
 
 export const sportsGetPlayer = tool('sports_get_player', {
   description:
@@ -67,9 +68,7 @@ export const sportsGetPlayer = tool('sports_get_player', {
     const player = await getTheSportsDbService().lookupPlayer(rawId, ctx);
 
     if (!player) {
-      throw ctx.fail('player_not_found', `No player found with ID "${input.player_id}".`, {
-        ...ctx.recoveryFor('player_not_found'),
-      });
+      throw ctx.fail('player_not_found', `No player found with ID "${input.player_id}".`);
     }
 
     return { player };
@@ -78,21 +77,24 @@ export const sportsGetPlayer = tool('sports_get_player', {
   format: (result) => {
     const p = result.player;
     const lines: string[] = [
-      `# ${p.name}`,
-      `**Team:** ${p.team ?? 'N/A'} | **Position:** ${p.position ?? 'N/A'}`,
-      `**Nationality:** ${p.nationality ?? 'N/A'} | **Born:** ${p.birthDate ?? 'N/A'}`,
-      `**Height:** ${p.height ?? 'N/A'} | **Weight:** ${p.weight ?? 'N/A'}`,
-      `**ID:** ${p.id} (TSDB: ${p.tsdbId}) | **ESPN:** ${p.espnId ?? 'N/A'}`,
+      inline`# ${p.name}`,
+      inline`**Team:** ${p.team ?? 'N/A'} | **Position:** ${p.position ?? 'N/A'}`,
+      inline`**Nationality:** ${p.nationality ?? 'N/A'} | **Born:** ${p.birthDate ?? 'N/A'}`,
+      inline`**Height:** ${p.height ?? 'N/A'} | **Weight:** ${p.weight ?? 'N/A'}`,
+      inline`**ID:** ${p.id} (TSDB: ${p.tsdbId}) | **ESPN:** ${p.espnId ?? 'N/A'}`,
     ];
 
-    if (p.thumbnailUrl) lines.push(`**Thumbnail:** ${p.thumbnailUrl}`);
+    if (p.thumbnailUrl) lines.push(inline`**Thumbnail:** ${p.thumbnailUrl}`);
 
     if (p.description) {
       lines.push('', '## Bio');
-      lines.push(p.description);
+      let width = 3;
+      for (const run of p.description.matchAll(/`+/g)) width = Math.max(width, run[0].length + 1);
+      const fence = '`'.repeat(width);
+      lines.push(`${fence}text`, p.description, fence);
     }
 
-    lines.push(`Source: ${p.source}`);
+    lines.push(inline`Source: ${p.source}`);
 
     return [{ type: 'text' as const, text: lines.join('\n') }];
   },

@@ -3,7 +3,7 @@
  * @module tests/tools/sports-get-team.tool.test
  */
 
-import { createMockContext } from '@cyanheads/mcp-ts-core/testing';
+import { createMockContext, runToolContract } from '@cyanheads/mcp-ts-core/testing';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { NormalizedGame, NormalizedTeam } from '@/services/types.js';
 
@@ -137,5 +137,54 @@ describe('sportsGetTeam', () => {
     expect(text).toContain('Geno Smith');
     expect(text).toContain('QB');
     expect(text).toContain('espn:500');
+  });
+
+  it('carries team_not_found recovery on both client surfaces', async () => {
+    mockEspnSvc.getTeams.mockResolvedValue([]);
+    const result = await runToolContract(sportsGetTeam, { league: 'nfl', team_name: 'Missing' });
+    expect(result.structuredContent).toMatchObject({
+      error: {
+        data: {
+          reason: 'team_not_found',
+          recovery: { hint: expect.stringContaining('sports_find_team') },
+        },
+      },
+    });
+    expect(JSON.stringify(result.content)).toContain('Recovery:');
+  });
+
+  it('keeps the last five results and first three fixtures across both surfaces', async () => {
+    mockEspnSvc.getTeams.mockResolvedValue([makeTeam()]);
+    mockEspnSvc.getTeamDetail.mockResolvedValue(makeTeam());
+    mockEspnSvc.getTeamRoster.mockResolvedValue([]);
+    mockEspnSvc.getTeamSchedule.mockResolvedValue([
+      ...Array.from({ length: 8 }, (_, i) =>
+        makeGame({ id: `espn:past-${i}`, status: 'final', startTimeUtc: '2020-01-01T12:00:00Z' }),
+      ),
+      ...Array.from({ length: 6 }, (_, i) =>
+        makeGame({ id: `espn:future-${i}`, startTimeUtc: '2099-01-01T12:00:00Z' }),
+      ),
+    ]);
+    const result = await sportsGetTeam.handler(
+      { league: 'nfl', team_name: 'Seahawks' },
+      createMockContext({ errors: sportsGetTeam.errors }),
+    );
+    expect(result.recentResults.map((game) => game.id)).toEqual([
+      'espn:past-3',
+      'espn:past-4',
+      'espn:past-5',
+      'espn:past-6',
+      'espn:past-7',
+    ]);
+    expect(result.upcomingFixtures.map((game) => game.id)).toEqual([
+      'espn:future-0',
+      'espn:future-1',
+      'espn:future-2',
+    ]);
+    const text = sportsGetTeam.format!(result)[0].text;
+    for (const game of [...result.recentResults, ...result.upcomingFixtures])
+      expect(text).toContain(game.id);
+    expect(text).not.toContain('espn:past-2');
+    expect(text).not.toContain('espn:future-3');
   });
 });

@@ -7,6 +7,7 @@ import { tool, z } from '@cyanheads/mcp-ts-core';
 import { getEspnService } from '@/services/espn/espn-service.js';
 import { getMlbService } from '@/services/mlb/mlb-service.js';
 import { LEAGUE_ROUTES } from '@/services/types.js';
+import { inline } from '../formatting.js';
 
 const LEAGUE_ENUM = z.enum([
   'nfl',
@@ -140,22 +141,24 @@ export const sportsGetScores = tool('sports_get_scores', {
 
   format: (result) => {
     const lines: string[] = [
-      `**${result.league.toUpperCase()} Scores — ${result.date}** (league: ${result.league})\n`,
+      inline`**${result.league.toUpperCase()} Scores — ${result.date}** (league: ${result.league})\n`,
     ];
 
-    if (result.reason) lines.push(`_${result.reason}_`);
+    if (result.reason) lines.push(inline`_${result.reason}_`);
 
     for (const g of result.games) {
       const periodStr = g.period != null ? ` | Period/Inning: ${g.period}` : '';
       const clockStr = g.clock ? ` | Clock: ${g.clock}` : '';
-      lines.push(`**${g.shortName}** [${g.id}] — ${g.status}${periodStr}${clockStr}`);
+      lines.push(inline`**${g.shortName}** [${g.id}] — ${g.status}${periodStr}${clockStr}`);
       lines.push(
-        `  Away: ${g.awayTeam.name} (${g.awayTeam.abbreviation}) [${g.awayTeam.id}] — ${g.awayTeam.score ?? '—'}`,
+        inline`  Away: ${g.awayTeam.name} (${g.awayTeam.abbreviation}) [${g.awayTeam.id}] — ${g.awayTeam.score ?? '—'}`,
       );
       lines.push(
-        `  Home: ${g.homeTeam.name} (${g.homeTeam.abbreviation}) [${g.homeTeam.id}] — ${g.homeTeam.score ?? '—'}`,
+        inline`  Home: ${g.homeTeam.name} (${g.homeTeam.abbreviation}) [${g.homeTeam.id}] — ${g.homeTeam.score ?? '—'}`,
       );
-      lines.push(`  Start: ${g.startTimeUtc} | Venue: ${g.venue ?? 'N/A'} | Source: ${g.source}`);
+      lines.push(
+        inline`  Start: ${g.startTimeUtc} | Venue: ${g.venue ?? 'N/A'} | Source: ${g.source}`,
+      );
     }
 
     return [{ type: 'text' as const, text: lines.join('\n') }];

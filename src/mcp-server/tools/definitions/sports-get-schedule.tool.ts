@@ -5,10 +5,12 @@
 
 import { tool, z } from '@cyanheads/mcp-ts-core';
 import { JsonRpcErrorCode } from '@cyanheads/mcp-ts-core/errors';
-import { fetchWithTimeout, withRetry } from '@cyanheads/mcp-ts-core/utils';
+import { withRetry } from '@cyanheads/mcp-ts-core/utils';
 import { getEspnService } from '@/services/espn/espn-service.js';
+import { fetchProviderText } from '@/services/fetch-provider-text.js';
 import { getMlbService } from '@/services/mlb/mlb-service.js';
 import { LEAGUE_ROUTES, type NormalizedGame } from '@/services/types.js';
+import { inline } from '../formatting.js';
 
 const LEAGUE_ENUM = z.enum([
   'nfl',
@@ -138,18 +140,22 @@ export const sportsGetSchedule = tool('sports_get_schedule', {
             t.abbreviation.toLowerCase() === q,
         );
         if (!team)
-          throw ctx.fail('team_not_found', `No MLB team found matching "${input.team_name}".`, {
-            ...ctx.recoveryFor('team_not_found'),
-          });
+          throw ctx.fail('team_not_found', `No MLB team found matching "${input.team_name}".`);
 
         // Fetch schedule for multiple individual dates would be expensive; use date range via MLB API
         const url = `https://statsapi.mlb.com/api/v1/schedule?sportId=1&hydrate=team,linescore&teamId=${team.mlbId}&startDate=${from}&endDate=${to}`;
         const data = await withRetry(
-          async () => {
-            const res = await fetchWithTimeout(url, 10_000, ctx, { signal: ctx.signal });
-            return res.json() as Promise<{ dates?: unknown[] }>;
+          async (attempt) => {
+            const text = await fetchProviderText(url, ctx, attempt);
+            return JSON.parse(text) as { dates?: unknown[] };
           },
-          { operation: 'mlb-team-schedule', context: ctx, baseDelayMs: 1000 },
+          {
+            operation: 'mlb-team-schedule',
+            context: ctx,
+            baseDelayMs: 1000,
+            signal: ctx.signal,
+            deadlineMs: 30_000,
+          },
         );
         const allGames: NormalizedGame[] = [];
         for (const d of data?.dates ?? []) {
@@ -229,7 +235,6 @@ export const sportsGetSchedule = tool('sports_get_schedule', {
           throw ctx.fail(
             'team_not_found',
             `No team found matching "${input.team_name}" in ${input.league}.`,
-            { ...ctx.recoveryFor('team_not_found') },
           );
         const teamId = team.espnId ?? team.id.replace('espn:', '');
         games = await getEspnService().getTeamSchedule(
@@ -274,10 +279,10 @@ export const sportsGetSchedule = tool('sports_get_schedule', {
   },
 
   format: (result) => {
-    const parts = [`**${result.league.toUpperCase()} Schedule** (league: ${result.league})`];
-    if (result.teamFilter) parts.push(` — ${result.teamFilter}`);
+    const parts = [inline`**${result.league.toUpperCase()} Schedule** (league: ${result.league})`];
+    if (result.teamFilter) parts.push(inline` — ${result.teamFilter}`);
     if (result.dateFrom || result.dateTo) {
-      parts.push(` (${result.dateFrom ?? '...'} → ${result.dateTo ?? '...'})`);
+      parts.push(inline` (${result.dateFrom ?? '...'} → ${result.dateTo ?? '...'})`);
     }
     parts.push(`\n_${result.totalReturned} games_\n`);
     const lines: string[] = [parts.join('')];
@@ -285,14 +290,16 @@ export const sportsGetSchedule = tool('sports_get_schedule', {
     for (const g of result.games) {
       const periodStr = g.period != null ? ` | Period: ${g.period}` : '';
       const clockStr = g.clock ? ` | Clock: ${g.clock}` : '';
-      lines.push(`**${g.shortName}** [${g.id}] — ${g.status}${periodStr}${clockStr}`);
+      lines.push(inline`**${g.shortName}** [${g.id}] — ${g.status}${periodStr}${clockStr}`);
       lines.push(
-        `  Away: ${g.awayTeam.name} (${g.awayTeam.abbreviation}) [${g.awayTeam.id}] — ${g.awayTeam.score ?? '—'}`,
+        inline`  Away: ${g.awayTeam.name} (${g.awayTeam.abbreviation}) [${g.awayTeam.id}] — ${g.awayTeam.score ?? '—'}`,
       );
       lines.push(
-        `  Home: ${g.homeTeam.name} (${g.homeTeam.abbreviation}) [${g.homeTeam.id}] — ${g.homeTeam.score ?? '—'}`,
+        inline`  Home: ${g.homeTeam.name} (${g.homeTeam.abbreviation}) [${g.homeTeam.id}] — ${g.homeTeam.score ?? '—'}`,
       );
-      lines.push(`  Start: ${g.startTimeUtc} | Venue: ${g.venue ?? 'N/A'} | Source: ${g.source}`);
+      lines.push(
+        inline`  Start: ${g.startTimeUtc} | Venue: ${g.venue ?? 'N/A'} | Source: ${g.source}`,
+      );
     }
 
     return [{ type: 'text' as const, text: lines.join('\n') }];

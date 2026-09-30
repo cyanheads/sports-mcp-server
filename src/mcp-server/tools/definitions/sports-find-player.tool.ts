@@ -6,6 +6,7 @@
 import { tool, z } from '@cyanheads/mcp-ts-core';
 import { JsonRpcErrorCode } from '@cyanheads/mcp-ts-core/errors';
 import { getTheSportsDbService } from '@/services/thesportsdb/thesportsdb-service.js';
+import { inline } from '../formatting.js';
 
 export const sportsFindPlayer = tool('sports_find_player', {
   description:
@@ -108,17 +109,17 @@ export const sportsFindPlayer = tool('sports_find_player', {
 
   format: (result) => {
     const lines: string[] = [
-      `**Player Search: "${result.query}"** — ${result.totalFound} result(s)\n`,
+      inline`**Player Search: "${result.query}"** — ${result.totalFound} result(s)\n`,
     ];
 
     for (const p of result.players) {
-      lines.push(`### ${p.name}`);
+      lines.push(inline`### ${p.name}`);
       lines.push(
-        `Team: ${p.team ?? 'N/A'} | Position: ${p.position ?? 'N/A'} | Nationality: ${p.nationality ?? 'N/A'}`,
+        inline`Team: ${p.team ?? 'N/A'} | Position: ${p.position ?? 'N/A'} | Nationality: ${p.nationality ?? 'N/A'}`,
       );
-      lines.push(`Born: ${p.birthDate ?? 'N/A'} | ID: ${p.id} (TSDB: ${p.tsdbId})`);
-      lines.push(`Source: ${p.source}`);
-      if (p.thumbnailUrl) lines.push(`Thumbnail: ${p.thumbnailUrl}`);
+      lines.push(inline`Born: ${p.birthDate ?? 'N/A'} | ID: ${p.id} (TSDB: ${p.tsdbId})`);
+      lines.push(inline`Source: ${p.source}`);
+      if (p.thumbnailUrl) lines.push(inline`Thumbnail: ${p.thumbnailUrl}`);
     }
 
     return [{ type: 'text' as const, text: lines.join('\n') }];

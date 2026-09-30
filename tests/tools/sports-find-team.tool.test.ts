@@ -3,6 +3,7 @@
  * @module tests/tools/sports-find-team.tool.test
  */
 
+import { JsonRpcErrorCode, McpError, serviceUnavailable } from '@cyanheads/mcp-ts-core/errors';
 import { createMockContext } from '@cyanheads/mcp-ts-core/testing';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { NormalizedTeam } from '@/services/types.js';
@@ -308,5 +309,56 @@ describe('sportsFindTeam', () => {
     expect(text).toContain('tsdb:133604');
     expect(text).toContain('thesportsdb');
     expect(text).toContain('Emirates Stadium');
+  });
+
+  describe.each(['espn-scoped', 'mlb-scoped', 'mlb-unscoped'])('%s optional lookup', (path) => {
+    function prepare(error: Error) {
+      mockTsdbSvc.searchTeams.mockResolvedValue([
+        makeTeam({ name: 'Mariners', displayName: 'Seattle Mariners', league: 'MLB' }),
+      ]);
+      mockEspnSvc.getTeams.mockResolvedValue([]);
+      mockMlbSvc.getTeams.mockResolvedValue([]);
+      (path === 'espn-scoped' ? mockEspnSvc.getTeams : mockMlbSvc.getTeams).mockRejectedValue(
+        error,
+      );
+      return sportsFindTeam.input.parse({
+        query: 'Mariners',
+        ...(path === 'mlb-unscoped' ? {} : { league: 'mlb' }),
+      });
+    }
+
+    it('retains a primary match during an optional outage', async () => {
+      const input = prepare(serviceUnavailable('Provider outage'));
+      const result = await sportsFindTeam.handler(
+        input,
+        createMockContext({ errors: sportsFindTeam.errors }),
+      );
+      expect(result.teams).toHaveLength(1);
+    });
+
+    it.each([
+      JsonRpcErrorCode.InvalidParams,
+      JsonRpcErrorCode.ValidationError,
+      JsonRpcErrorCode.RequestCancelled,
+    ])('propagates code %i unchanged', async (code) => {
+      const error = new McpError(code, 'Provider rejected request');
+      const input = prepare(error);
+      await expect(
+        sportsFindTeam.handler(input, createMockContext({ errors: sportsFindTeam.errors })),
+      ).rejects.toBe(error);
+    });
+
+    it('rethrows a raw failure when the caller has cancelled', async () => {
+      const caller = new AbortController();
+      const error = new Error('Abort');
+      const input = prepare(error);
+      caller.abort();
+      await expect(
+        sportsFindTeam.handler(
+          input,
+          createMockContext({ errors: sportsFindTeam.errors, signal: caller.signal }),
+        ),
+      ).rejects.toBe(error);
+    });
   });
 });

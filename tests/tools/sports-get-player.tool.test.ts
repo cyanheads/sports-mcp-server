@@ -3,7 +3,7 @@
  * @module tests/tools/sports-get-player.tool.test
  */
 
-import { createMockContext } from '@cyanheads/mcp-ts-core/testing';
+import { createMockContext, runToolContract } from '@cyanheads/mcp-ts-core/testing';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { NormalizedPlayer } from '@/services/types.js';
 
@@ -100,6 +100,21 @@ describe('sportsGetPlayer', () => {
 
     expect(result.player.height).toBeNull();
     expect(result.player.description).toBeNull();
+  });
+
+  it('carries player_not_found recovery on both client surfaces', async () => {
+    mockTsdbSvc.lookupPlayer.mockResolvedValue(null);
+    const result = await runToolContract(sportsGetPlayer, { player_id: '999' });
+    expect(result.structuredContent).toMatchObject({
+      error: {
+        data: {
+          reason: 'player_not_found',
+          recovery: { hint: expect.stringContaining('sports_find_player') },
+        },
+      },
+    });
+    expect(JSON.stringify(result.content)).toContain('Recovery:');
+    expect(JSON.stringify(result.content)).toContain('sports_find_player');
   });
 
   it('formats output completely', () => {

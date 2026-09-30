@@ -5,9 +5,14 @@
 
 import type { Context } from '@cyanheads/mcp-ts-core';
 import type { AppConfig } from '@cyanheads/mcp-ts-core/config';
-import { serviceUnavailable } from '@cyanheads/mcp-ts-core/errors';
+import {
+  McpError,
+  requestCancelled,
+  serviceUnavailable,
+  timeout,
+} from '@cyanheads/mcp-ts-core/errors';
 import type { StorageService } from '@cyanheads/mcp-ts-core/storage';
-import { withRetry } from '@cyanheads/mcp-ts-core/utils';
+import { httpErrorFromResponse, withRetry } from '@cyanheads/mcp-ts-core/utils';
 import { getServerConfig } from '../../config/server-config.js';
 import type { NormalizedPlayer, NormalizedTeam } from '../types.js';
 
@@ -20,34 +25,73 @@ export class TheSportsDbService {
 
   private fetchJson<T>(url: string, ctx: Context): Promise<T> {
     return withRetry(
-      async () => {
+      async ({ signal, remainingMs }) => {
+        // The API key is a path segment; fetchWithTimeout logs paths before a caller can redact them.
         const controller = new AbortController();
-        const timer = setTimeout(() => controller.abort(), 10_000);
-        let response: Response;
+        const timeoutMs = Math.min(10_000, remainingMs);
+        const timeoutReason = new DOMException('TheSportsDB attempt timed out.', 'TimeoutError');
+        const timer = setTimeout(() => controller.abort(timeoutReason), timeoutMs);
+        const combined = AbortSignal.any([signal, controller.signal]);
         try {
-          response = await fetch(url, { signal: ctx.signal ?? controller.signal });
+          const response = await fetch(url, { signal: combined });
+          if (!response.ok) {
+            const error = await httpErrorFromResponse(response, {
+              service: 'TheSportsDB',
+              includeUrl: false,
+            });
+            // The HTTP helper tolerates unreadable bodies; an abort still ends this attempt.
+            combined.throwIfAborted();
+            const key = getServerConfig().theSportsDbApiKey;
+            const scrub = (value: string) => value.replaceAll(key, '[redacted]');
+            throw new McpError(
+              error.code,
+              scrub(error.message),
+              Object.fromEntries(
+                Object.entries(error.data ?? {}).map(([name, value]) => [
+                  name,
+                  typeof value === 'string' ? scrub(value) : value,
+                ]),
+              ),
+            );
+          }
+          const text = await response.text();
+          combined.throwIfAborted();
+          if (/^\s*<(!DOCTYPE\s+html|html[\s>])/i.test(text)) {
+            throw serviceUnavailable(
+              'TheSportsDB returned HTML instead of JSON — likely rate-limited.',
+            );
+          }
+          try {
+            return JSON.parse(text) as T;
+          } catch {
+            throw serviceUnavailable('TheSportsDB returned non-JSON response.');
+          }
+        } catch (error: unknown) {
+          if (signal.aborted) {
+            if (signal.reason?.name === 'TimeoutError') {
+              throw timeout('TheSportsDB request reached its external deadline.', {
+                errorSource: 'FetchSignalTimeout',
+              });
+            }
+            throw requestCancelled('TheSportsDB request was cancelled.', {
+              errorSource: 'FetchAborted',
+            });
+          }
+          if (controller.signal.aborted) {
+            throw timeout('TheSportsDB request timed out.', { errorSource: 'FetchTimeout' });
+          }
+          if (error instanceof McpError) throw error;
+          // Native errors and their causes may carry the credential-bearing URL.
+          throw serviceUnavailable('TheSportsDB network request failed.');
         } finally {
           clearTimeout(timer);
-        }
-        if (!response.ok) {
-          throw serviceUnavailable(`TheSportsDB returned HTTP ${response.status}`);
-        }
-        const text = await response.text();
-        if (/^\s*<(!DOCTYPE\s+html|html[\s>])/i.test(text)) {
-          throw serviceUnavailable(
-            'TheSportsDB returned HTML instead of JSON — likely rate-limited.',
-          );
-        }
-        try {
-          return JSON.parse(text) as T;
-        } catch {
-          throw serviceUnavailable('TheSportsDB returned non-JSON response.');
         }
       },
       {
         operation: 'TheSportsDbService.fetchJson',
         baseDelayMs: 500,
         signal: ctx.signal,
+        deadlineMs: 30_000,
       },
     );
   }

@@ -7,8 +7,10 @@ import { tool, z } from '@cyanheads/mcp-ts-core';
 import { JsonRpcErrorCode } from '@cyanheads/mcp-ts-core/errors';
 import { getEspnService } from '@/services/espn/espn-service.js';
 import { getMlbService } from '@/services/mlb/mlb-service.js';
+import { rethrowTerminalProviderError } from '@/services/provider-errors.js';
 import { getTheSportsDbService } from '@/services/thesportsdb/thesportsdb-service.js';
 import { LEAGUE_ROUTES, type NormalizedTeam } from '@/services/types.js';
+import { inline } from '../formatting.js';
 
 const LEAGUE_ENUM = z.enum([
   'nfl',
@@ -133,8 +135,8 @@ export const sportsFindTeam = tool('sports_find_team', {
               if (!alreadyInResults) results.push(t);
             }
           }
-        } catch {
-          // ESPN fetch failure is non-fatal for find_team
+        } catch (error: unknown) {
+          rethrowTerminalProviderError(error, ctx);
           ctx.log.warning('ESPN team list fetch failed during find_team', { league: input.league });
         }
 
@@ -152,7 +154,8 @@ export const sportsFindTeam = tool('sports_find_team', {
                 if (!alreadyInResults) results.push(t);
               }
             }
-          } catch {
+          } catch (error: unknown) {
+            rethrowTerminalProviderError(error, ctx);
             ctx.log.warning('MLB teams fetch failed during find_team');
           }
         }
@@ -171,7 +174,8 @@ export const sportsFindTeam = tool('sports_find_team', {
             if (!alreadyInResults) results.push(t);
           }
         }
-      } catch {
+      } catch (error: unknown) {
+        rethrowTerminalProviderError(error, ctx);
         ctx.log.warning('MLB teams fetch failed during find_team');
       }
     }
@@ -224,18 +228,18 @@ export const sportsFindTeam = tool('sports_find_team', {
 
   format: (result) => {
     const lines: string[] = [
-      `**Team Search: "${result.query}"** — ${result.totalFound} result(s)\n`,
+      inline`**Team Search: "${result.query}"** — ${result.totalFound} result(s)\n`,
     ];
 
     for (const t of result.teams) {
-      lines.push(`### ${t.displayName} (${t.name})`);
-      lines.push(`League: ${t.league} | Abbreviation: ${t.abbreviation}`);
-      lines.push(`Location: ${t.location} | Venue: ${t.venueName ?? 'N/A'}`);
+      lines.push(inline`### ${t.displayName} (${t.name})`);
+      lines.push(inline`League: ${t.league} | Abbreviation: ${t.abbreviation}`);
+      lines.push(inline`Location: ${t.location} | Venue: ${t.venueName ?? 'N/A'}`);
       lines.push(
-        `IDs — Primary: ${t.id} | ESPN: ${t.espnId ?? 'N/A'} | MLB: ${t.mlbId ?? 'N/A'} | TSDB: ${t.tsdbId ?? 'N/A'}`,
+        inline`IDs — Primary: ${t.id} | ESPN: ${t.espnId ?? 'N/A'} | MLB: ${t.mlbId ?? 'N/A'} | TSDB: ${t.tsdbId ?? 'N/A'}`,
       );
-      if (t.logoUrl) lines.push(`Logo: ${t.logoUrl}`);
-      lines.push(`Source: ${t.source}`);
+      if (t.logoUrl) lines.push(inline`Logo: ${t.logoUrl}`);
+      lines.push(inline`Source: ${t.source}`);
     }
 
     return [{ type: 'text' as const, text: lines.join('\n') }];

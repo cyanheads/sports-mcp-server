@@ -8,6 +8,7 @@ import { JsonRpcErrorCode } from '@cyanheads/mcp-ts-core/errors';
 import { getEspnService } from '@/services/espn/espn-service.js';
 import { getMlbService } from '@/services/mlb/mlb-service.js';
 import { LEAGUE_ROUTES, type NormalizedStanding } from '@/services/types.js';
+import { inline } from '../formatting.js';
 
 const LEAGUE_ENUM = z.enum([
   'nfl',
@@ -152,7 +153,7 @@ export const sportsGetStandings = tool('sports_get_standings', {
   format: (result) => {
     const seasonLabel = result.season ? ` ${result.season}` : '';
     const lines: string[] = [
-      `**${result.league.toUpperCase()}${seasonLabel} Standings** (league: ${result.league}, source: ${result.source})\n`,
+      inline`**${result.league.toUpperCase()}${seasonLabel} Standings** (league: ${result.league}, source: ${result.source})\n`,
     ];
 
     for (const s of result.standings) {
@@ -165,7 +166,7 @@ export const sportsGetStandings = tool('sports_get_standings', {
       const divRank = s.divisionRank ? ` | divRank:${s.divisionRank}` : '';
 
       lines.push(
-        `${s.rank}. **${s.team.abbreviation}** (${s.team.name}) [${s.team.id}] — ${record}${pct}${streak}${gb}${divRank}`,
+        inline`${s.rank}. **${s.team.abbreviation}** (${s.team.name}) [${s.team.id}] — ${record}${pct}${streak}${gb}${divRank}`,
       );
     }
 

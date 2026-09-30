@@ -16,11 +16,7 @@ import { EspnService } from '@/services/espn/espn-service.js';
 
 function stubFetch(body: unknown): void {
   const mockFetch = vi.mocked(fetch);
-  mockFetch.mockResolvedValueOnce({
-    ok: true,
-    text: async () => JSON.stringify(body),
-    json: async () => body,
-  } as Response);
+  mockFetch.mockResolvedValueOnce(Response.json(body));
 }
 
 /** Build a minimal ESPN event stub. score can be a string (scoreboard) or an object (schedule). */
@@ -150,7 +146,7 @@ describe('EspnService.normalizeEvents', () => {
     vi.useFakeTimers();
     vi.mocked(fetch)
       .mockReset()
-      .mockResolvedValue({ ok: false, status: 503 } as Response);
+      .mockImplementation(async () => new Response('unavailable', { status: 503 }));
 
     try {
       const rejection = expect(

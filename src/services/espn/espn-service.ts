@@ -5,9 +5,10 @@
 
 import type { Context } from '@cyanheads/mcp-ts-core';
 import type { AppConfig } from '@cyanheads/mcp-ts-core/config';
-import { serviceUnavailable, validationError } from '@cyanheads/mcp-ts-core/errors';
+import { JsonRpcErrorCode, McpError, serviceUnavailable } from '@cyanheads/mcp-ts-core/errors';
 import type { StorageService } from '@cyanheads/mcp-ts-core/storage';
 import { withRetry } from '@cyanheads/mcp-ts-core/utils';
+import { fetchProviderText } from '../fetch-provider-text.js';
 import type { NormalizedGame, NormalizedStanding, NormalizedTeam } from '../types.js';
 
 const ESPN_BASE = 'https://site.api.espn.com';
@@ -27,21 +28,8 @@ function mapEspnStatus(state: string, typeName: string): NormalizedGame['status'
 export class EspnService {
   private fetchJson<T>(url: string, ctx: Context): Promise<T> {
     return withRetry(
-      async () => {
-        const controller = new AbortController();
-        const timer = setTimeout(() => controller.abort(), 10_000);
-        let response: Response;
-        try {
-          response = await fetch(url, {
-            signal: ctx.signal ?? controller.signal,
-          });
-        } finally {
-          clearTimeout(timer);
-        }
-        if (!response.ok) {
-          throw serviceUnavailable(`ESPN returned HTTP ${response.status}`);
-        }
-        const text = await response.text();
+      async (attempt) => {
+        const text = await fetchProviderText(url, ctx, attempt);
         if (/^\s*<(!DOCTYPE\s+html|html[\s>])/i.test(text)) {
           throw serviceUnavailable(
             'ESPN returned HTML instead of JSON — likely rate-limited or invalid endpoint.',
@@ -57,6 +45,7 @@ export class EspnService {
         operation: 'EspnService.fetchJson',
         baseDelayMs: 1000,
         signal: ctx.signal,
+        deadlineMs: 30_000,
       },
     );
   }
@@ -96,17 +85,27 @@ export class EspnService {
     const dateParam = dates ? `?dates=${dates}` : '';
     const url = `${ESPN_BASE}/apis/site/v2/sports/${sport}/${league}/scoreboard${dateParam}`;
 
-    // ESPN returns 400 on bad league slug — treat as validation error
     let data: { events?: unknown[] };
     try {
       data = await this.fetchJson<{ events?: unknown[] }>(url, ctx);
     } catch (err: unknown) {
-      const e = err as { code?: number; message?: string };
-      if (e?.code === -32602 || (e?.message ?? '').includes('400')) {
-        throw validationError(`Unknown ESPN league: ${league}`, {
-          reason: 'invalid_league',
-          league,
-        });
+      if (
+        !ctx.signal.aborted &&
+        err instanceof McpError &&
+        (err.code === JsonRpcErrorCode.InvalidParams ||
+          err.code === JsonRpcErrorCode.ValidationError)
+      ) {
+        throw new McpError(
+          err.code,
+          err.message,
+          {
+            ...err.data,
+            recovery: {
+              hint: 'ESPN rejected the scoreboard request. Check any supplied date, date_from, and date_to values; try omitting them to request the default scoreboard.',
+            },
+          },
+          { cause: err },
+        );
       }
       throw err;
     }
