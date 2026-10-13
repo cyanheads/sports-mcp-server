@@ -11,6 +11,7 @@ import { allResourceDefinitions } from './mcp-server/resources/definitions/index
 import {
   sportsFindPlayer,
   sportsFindTeam,
+  sportsGetGame,
   sportsGetPlayer,
   sportsGetSchedule,
   sportsGetScores,
@@ -26,6 +27,7 @@ await createApp({
   title: 'sports-mcp-server',
   tools: [
     sportsGetScores,
+    sportsGetGame,
     sportsGetSchedule,
     sportsGetStandings,
     sportsFindTeam,

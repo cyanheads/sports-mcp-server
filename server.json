@@ -17,7 +17,7 @@
       "environmentVariables": [
         {
           "name": "THESPORTSDB_API_KEY",
-          "description": "TheSportsDB API key. Defaults to '3' (free public test key). Replace with a paid key for higher rate limits.",
+          "description": "TheSportsDB API key. Defaults to '3', whose team/player searches have a one-record limit. A premium key enables broader searches.",
           "format": "string",
           "isRequired": false,
           "default": "3"
@@ -49,7 +49,7 @@
         },
         {
           "name": "THESPORTSDB_API_KEY",
-          "description": "TheSportsDB API key. Defaults to '3' (free public test key). Replace with a paid key for higher rate limits.",
+          "description": "TheSportsDB API key. Defaults to '3', whose team/player searches have a one-record limit. A premium key enables broader searches.",
           "format": "string",
           "isRequired": false,
           "default": "3"

@@ -27,6 +27,51 @@ export interface NormalizedGame {
   venue: string | null;
 }
 
+/** Game-only detail; unsupported or unavailable sections remain empty. */
+export interface GameDetail {
+  game: NormalizedGame;
+  leaders: Array<{
+    team: GameTeam;
+    category: string;
+    label: string | null;
+    player: GamePerson;
+    displayValue: string | null;
+  }>;
+  periodScores: Array<{
+    period: number;
+    label: string | null;
+    homeScore: string | null;
+    awayScore: string | null;
+  }>;
+  scoringPlays: Array<{
+    id: string | null;
+    period: number | null;
+    clock: string | null;
+    teamId: string | null;
+    text: string;
+    homeScore: string | null;
+    awayScore: string | null;
+    participants: GamePerson[];
+  }>;
+  teamStats: Array<{
+    team: GameTeam;
+    statistics: Array<{ name: string; label: string | null; value: string | null }>;
+  }>;
+}
+
+/** Provider identity in game detail without a score. */
+export interface GameTeam {
+  abbreviation: string;
+  id: string;
+  name: string;
+}
+
+/** Provider athlete identity; names may be absent on scoring events. */
+export interface GamePerson {
+  id: string;
+  name: string | null;
+}
+
 /** A normalized team record from any source. */
 export interface NormalizedTeam {
   abbreviation: string;
@@ -48,7 +93,9 @@ export interface NormalizedTeam {
 export interface NormalizedStanding {
   divisionRank: string | null;
   gamesBehind: string | null;
+  group: string | null;
   losses: number;
+  overtimeLosses: number | null;
   points: number | null;
   rank: number;
   source: 'espn' | 'mlbstats';

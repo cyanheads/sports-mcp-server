@@ -5,6 +5,7 @@
 
 import { tool, z } from '@cyanheads/mcp-ts-core';
 import { JsonRpcErrorCode } from '@cyanheads/mcp-ts-core/errors';
+import { getServerConfig } from '@/config/server-config.js';
 import { getTheSportsDbService } from '@/services/thesportsdb/thesportsdb-service.js';
 import { inline } from '../formatting.js';
 
@@ -59,8 +60,17 @@ export const sportsFindPlayer = tool('sports_find_player', {
       )
       .describe('Players matching the search query.'),
     query: z.string().describe('The search query used.'),
-    totalFound: z.number().describe('Total number of players found.'),
+    totalFound: z
+      .number()
+      .describe('Number of player records returned, not the total available from the provider.'),
   }),
+
+  enrichment: {
+    notice: z
+      .string()
+      .optional()
+      .describe('Provider search completeness guidance when using the known free key.'),
+  },
 
   errors: [
     {
@@ -88,6 +98,12 @@ export const sportsFindPlayer = tool('sports_find_player', {
       throw ctx.fail('no_match', `No player found matching "${input.query}".`, {
         ...ctx.recoveryFor('no_match'),
       });
+    }
+
+    if (getServerConfig().theSportsDbApiKey === '3') {
+      ctx.enrich.notice(
+        'TheSportsDB free-key search results may be incomplete (one-record limit). Try a fuller name or a premium key.',
+      );
     }
 
     return {

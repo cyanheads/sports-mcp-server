@@ -219,8 +219,10 @@ src/
     types.ts                            # Normalized types (NormalizedGame, NormalizedTeam, NormalizedPlayer, NormalizedStanding, LEAGUE_ROUTES)
     espn/
       espn-service.ts                   # ESPN site API — scores, schedules, standings, teams
+      espn-game-detail.ts               # Summary game-only statistics and scoring events
     mlb/
       mlb-service.ts                    # MLB StatsAPI — scores, schedules, standings, rosters
+      mlb-game-detail.ts                # Live-feed game-only statistics and scoring events
     thesportsdb/
       thesportsdb-service.ts            # TheSportsDB — player/team search and metadata
   mcp-server/
@@ -228,6 +230,7 @@ src/
       sports-find-player.tool.ts        # Resolve player name → canonical record
       sports-find-team.tool.ts          # Resolve team name → canonical record + IDs
       sports-get-player.tool.ts         # Player bio and metadata
+      sports-get-game.tool.ts           # League-routed game detail and scoring-play pages
       sports-get-scores.tool.ts         # Live and final scores by league/date
       sports-get-schedule.tool.ts       # Team or league schedule over a date range
       sports-get-standings.tool.ts      # League standings by season

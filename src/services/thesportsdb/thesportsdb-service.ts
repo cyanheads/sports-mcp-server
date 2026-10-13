@@ -173,7 +173,10 @@ export class TheSportsDbService {
     return {
       id: `tsdb:${String(p.idPlayer ?? '')}`,
       tsdbId: String(p.idPlayer ?? ''),
-      espnId: null,
+      espnId:
+        p.idESPN != null && String(p.idESPN).trim() !== '' && String(p.idESPN).trim() !== '0'
+          ? String(p.idESPN).trim()
+          : null,
       name: String(p.strPlayer ?? ''),
       team: p.strTeam != null && String(p.strTeam) !== '' ? String(p.strTeam) : null,
       position:

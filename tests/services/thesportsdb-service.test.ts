@@ -8,6 +8,19 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { TheSportsDbService } from '@/services/thesportsdb/thesportsdb-service.js';
 
 describe('TheSportsDbService', () => {
+  it.each([
+    ['39832', '39832'],
+    ['', null],
+    ['0', null],
+    [undefined, null],
+  ])('maps supplied player ESPN ID %j', async (idESPN, expected) => {
+    vi.mocked(fetch).mockResolvedValueOnce(
+      Response.json({ players: [{ idPlayer: '34185573', strPlayer: 'Shohei Ohtani', idESPN }] }),
+    );
+    await expect(
+      new TheSportsDbService().lookupPlayer('34185573', createMockContext()),
+    ).resolves.toMatchObject({ espnId: expected });
+  });
   beforeEach(() =>
     vi.stubGlobal(
       'fetch',

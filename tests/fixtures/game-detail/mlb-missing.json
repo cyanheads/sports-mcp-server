@@ -1,0 +1,6 @@
+{
+  "url": "https://statsapi.mlb.com/api/v1.1/game/999999999999/feed/live",
+  "status": 400,
+  "capturedAt": "2026-10-13T13:41:07.731Z",
+  "body": "{\"messageNumber\":11,\"message\":\"Invalid Request with value: 999999999999\",\"timestamp\":\"2026-10-13T13:41:07.662534584Z\",\"traceId\":null}"
+}

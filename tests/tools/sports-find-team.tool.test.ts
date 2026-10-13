@@ -4,9 +4,12 @@
  */
 
 import { JsonRpcErrorCode, McpError, serviceUnavailable } from '@cyanheads/mcp-ts-core/errors';
-import { createMockContext } from '@cyanheads/mcp-ts-core/testing';
+import { createMockContext, runToolContract } from '@cyanheads/mcp-ts-core/testing';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { NormalizedTeam } from '@/services/types.js';
+
+const config = vi.hoisted(() => ({ theSportsDbApiKey: '3' }));
+vi.mock('@/config/server-config.js', () => ({ getServerConfig: () => config }));
 
 vi.mock('@/services/espn/espn-service.js', () => ({
   getEspnService: vi.fn(),
@@ -48,12 +51,35 @@ describe('sportsFindTeam', () => {
   const mockTsdbSvc = { searchTeams: vi.fn() };
 
   beforeEach(() => {
+    config.theSportsDbApiKey = '3';
     vi.clearAllMocks();
     vi.mocked(getEspnService).mockReturnValue(mockEspnSvc as ReturnType<typeof getEspnService>);
     vi.mocked(getMlbService).mockReturnValue(mockMlbSvc as ReturnType<typeof getMlbService>);
     vi.mocked(getTheSportsDbService).mockReturnValue(
       mockTsdbSvc as ReturnType<typeof getTheSportsDbService>,
     );
+  });
+  it.each(['3', 'custom-key'])(
+    'qualifies only successful free-key TSDB contributions (%s)',
+    async (key) => {
+      config.theSportsDbApiKey = key;
+      mockTsdbSvc.searchTeams.mockResolvedValue([makeTeam()]);
+      mockEspnSvc.getTeams.mockResolvedValue([]);
+      const result = await runToolContract(sportsFindTeam, { query: 'Arsenal', league: 'epl' });
+      expect(result.structuredContent).toMatchObject({ totalFound: 1 });
+      if (key === '3') {
+        expect(result.structuredContent).toMatchObject({
+          notice: expect.stringContaining('TheSportsDB'),
+        });
+        expect(JSON.stringify(result.content)).toContain('may be incomplete');
+      } else expect(result.structuredContent).not.toHaveProperty('notice');
+    },
+  );
+  it('does not describe ESPN-only contributions as capped', async () => {
+    mockTsdbSvc.searchTeams.mockResolvedValue([makeTeam({ league: 'unrelated' })]);
+    mockEspnSvc.getTeams.mockResolvedValue([makeTeam({ source: 'espn' })]);
+    const result = await runToolContract(sportsFindTeam, { query: 'Arsenal', league: 'epl' });
+    expect(result.structuredContent).not.toHaveProperty('notice');
   });
 
   it.each(['', '   '])('rejects blank query %j', (query) => {

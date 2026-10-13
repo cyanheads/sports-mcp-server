@@ -3,7 +3,7 @@
  * @module tests/tools/sports-get-standings.tool.test
  */
 
-import { createMockContext } from '@cyanheads/mcp-ts-core/testing';
+import { createMockContext, runToolContract } from '@cyanheads/mcp-ts-core/testing';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { NormalizedStanding } from '@/services/types.js';
 
@@ -21,6 +21,8 @@ import { getMlbService } from '@/services/mlb/mlb-service.js';
 function makeStanding(overrides: Partial<NormalizedStanding> = {}): NormalizedStanding {
   return {
     rank: 1,
+    group: null,
+    overtimeLosses: null,
     team: { id: 'espn:3', name: 'Kansas City Chiefs', abbreviation: 'KC' },
     wins: 14,
     losses: 3,
@@ -58,6 +60,40 @@ describe('sportsGetStandings', () => {
     expect(result.source).toBe('espn');
     expect(mockEspnSvc.getStandings).toHaveBeenCalledWith('football', 'nfl', null, ctx);
   });
+  it('delivers ranking groups and zero NHL overtime losses through both surfaces', async () => {
+    mockEspnSvc.getStandings.mockResolvedValue([
+      makeStanding({ group: 'Eastern Conference', overtimeLosses: 0, points: 0, ties: 0 }),
+    ]);
+    const result = await runToolContract(sportsGetStandings, { league: 'nhl', season: '2026' });
+    expect(result.structuredContent).toMatchObject({
+      season: '2026',
+      standings: [{ group: 'Eastern Conference', overtimeLosses: 0, points: 0, ties: 0 }],
+    });
+    const text = result.content
+      .map((block) => (block.type === 'text' ? block.text : ''))
+      .join('\n');
+    expect(text.split('\n')).toContain(
+      '1. **KC** (Kansas City Chiefs) [espn:3] — 14W 3L 0T 0OTL 0pts | group:Eastern Conference pct:.824 | streak:W3 | GB:- | divRank:1',
+    );
+  });
+  it('delivers explicit unverifiable season errors and recovery through both surfaces', async () => {
+    mockEspnSvc.getStandings.mockResolvedValue([]);
+    const result = await runToolContract(sportsGetStandings, { league: 'nfl', season: '1899' });
+    expect(result.structuredContent).toMatchObject({
+      error: {
+        data: { reason: 'season_not_found', recovery: { hint: expect.stringContaining('omit') } },
+      },
+    });
+    expect(JSON.stringify(result.content)).toContain('Recovery:');
+  });
+  it.each(['20', '20260', 'abcd'])(
+    'rejects invalid season %s before acquisition',
+    async (season) => {
+      const result = await runToolContract(sportsGetStandings, { league: 'nfl', season });
+      expect(result.isError).toBe(true);
+      expect(mockEspnSvc.getStandings).not.toHaveBeenCalled();
+    },
+  );
 
   it('routes MLB to mlb service', async () => {
     const standing = makeStanding({ source: 'mlbstats' });

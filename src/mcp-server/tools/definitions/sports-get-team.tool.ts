@@ -85,7 +85,11 @@ export const sportsGetTeam = tool('sports_get_team', {
       .array(
         z
           .object({
-            id: z.string().describe('Source-prefixed game ID, e.g. espn:401872656.'),
+            id: z
+              .string()
+              .describe(
+                'Source-prefixed game ID, e.g. espn:401872656. Pass with this league to sports_get_game.',
+              ),
             shortName: z.string().describe('Short matchup string, e.g. "SEA @ DAL".'),
             status: z
               .enum(['scheduled', 'in-progress', 'final', 'postponed', 'cancelled'])
@@ -118,7 +122,11 @@ export const sportsGetTeam = tool('sports_get_team', {
       .array(
         z
           .object({
-            id: z.string().describe('Source-prefixed game ID, e.g. espn:401872656.'),
+            id: z
+              .string()
+              .describe(
+                'Source-prefixed game ID, e.g. espn:401872656. Pass with this league to sports_get_game.',
+              ),
             shortName: z.string().describe('Short matchup string, e.g. "SEA @ DAL".'),
             status: z
               .enum(['scheduled', 'in-progress', 'final', 'postponed', 'cancelled'])

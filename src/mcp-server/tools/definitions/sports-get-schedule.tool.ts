@@ -90,7 +90,9 @@ export const sportsGetSchedule = tool('sports_get_schedule', {
       .array(
         z
           .object({
-            id: z.string().describe('Source-prefixed game ID.'),
+            id: z
+              .string()
+              .describe('Source-prefixed game ID. Pass with this league to sports_get_game.'),
             shortName: z.string().describe('Short matchup string.'),
             homeTeam: z
               .object({

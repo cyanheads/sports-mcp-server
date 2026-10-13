@@ -95,6 +95,21 @@ describe('sportsGetTeam', () => {
     expect(result.roster[0].name).toBe('Geno Smith');
     expect(result.upcomingFixtures).toHaveLength(1);
   });
+  it('delivers active roster positions, missing jerseys, and venue on both surfaces', async () => {
+    mockEspnSvc.getTeams.mockResolvedValue([makeTeam()]);
+    mockEspnSvc.getTeamDetail.mockResolvedValue(makeTeam());
+    mockEspnSvc.getTeamRoster.mockResolvedValue([
+      { name: 'Active Player', position: 'QB', jersey: null },
+    ]);
+    mockEspnSvc.getTeamSchedule.mockResolvedValue([]);
+    const result = await runToolContract(sportsGetTeam, { league: 'nfl', team_name: 'Seahawks' });
+    expect(result.structuredContent).toMatchObject({
+      team: { venueName: 'Lumen Field' },
+      roster: [{ name: 'Active Player', position: 'QB', jersey: null }],
+    });
+    for (const value of ['Active Player', 'QB', 'Lumen Field'])
+      expect(JSON.stringify(result.content)).toContain(value);
+  });
 
   it('throws team_not_found when ESPN team search yields nothing', async () => {
     mockEspnSvc.getTeams.mockResolvedValue([

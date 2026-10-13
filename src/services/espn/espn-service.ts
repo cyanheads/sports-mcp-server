@@ -3,16 +3,50 @@
  * @module services/espn/espn-service
  */
 
-import type { Context } from '@cyanheads/mcp-ts-core';
+import { type Context, z } from '@cyanheads/mcp-ts-core';
 import type { AppConfig } from '@cyanheads/mcp-ts-core/config';
-import { JsonRpcErrorCode, McpError, serviceUnavailable } from '@cyanheads/mcp-ts-core/errors';
+import {
+  JsonRpcErrorCode,
+  McpError,
+  notFound,
+  serviceUnavailable,
+} from '@cyanheads/mcp-ts-core/errors';
 import type { StorageService } from '@cyanheads/mcp-ts-core/storage';
 import { withRetry } from '@cyanheads/mcp-ts-core/utils';
 import { addCalendarDays } from '../date-window.js';
 import { fetchProviderText } from '../fetch-provider-text.js';
-import type { NormalizedGame, NormalizedStanding, NormalizedTeam } from '../types.js';
+import type { GameDetail, NormalizedGame, NormalizedStanding, NormalizedTeam } from '../types.js';
+import { normalizeEspnGameDetail } from './espn-game-detail.js';
 
 const ESPN_BASE = 'https://site.api.espn.com';
+
+const SummaryMetadata = z.looseObject({
+  header: z.looseObject({
+    id: z.string(),
+    competitions: z
+      .array(
+        z.looseObject({
+          date: z.string().min(1),
+          competitors: z
+            .array(
+              z.looseObject({
+                homeAway: z.enum(['home', 'away']),
+                team: z.looseObject({ id: z.string().min(1) }),
+              }),
+            )
+            .length(2),
+          status: z.looseObject({ type: z.looseObject({ state: z.enum(['pre', 'in', 'post']) }) }),
+        }),
+      )
+      .min(1),
+  }),
+  gameInfo: z
+    .looseObject({
+      venue: z.looseObject({ fullName: z.string().optional() }).nullable().optional(),
+    })
+    .nullable()
+    .optional(),
+});
 
 /** Maps ESPN status state to normalized status. */
 function mapEspnStatus(state: string, typeName: string): NormalizedGame['status'] {
@@ -27,6 +61,49 @@ function mapEspnStatus(state: string, typeName: string): NormalizedGame['status'
 }
 
 export class EspnService {
+  /** Resolve a source event ID through the caller's league, without cross-league inference. */
+  async getGame(sport: string, league: string, eventId: string, ctx: Context): Promise<GameDetail> {
+    let payload: unknown;
+    try {
+      payload = await this.fetchJson(
+        `${ESPN_BASE}/apis/site/v2/sports/${sport}/${league}/summary?event=${eventId}`,
+        ctx,
+      );
+    } catch (error: unknown) {
+      if (
+        !ctx.signal.aborted &&
+        error instanceof McpError &&
+        (error.code === JsonRpcErrorCode.InvalidParams || error.code === JsonRpcErrorCode.NotFound)
+      ) {
+        const body = String(error.data?.body ?? '');
+        // The captured missing-event signature is bounded by HTTP diagnostic capture.
+        if (
+          body.includes(`/sports/${sport}/leagues/${league}/events/${eventId}`) &&
+          (body.includes('status=400') || body.includes('status=404'))
+        ) {
+          throw notFound(
+            'No game exists for this ID in the requested league.',
+            { reason: 'game_not_found' },
+            { cause: error },
+          );
+        }
+      }
+      throw error;
+    }
+    const parsed = SummaryMetadata.safeParse(payload);
+    if (!parsed.success || parsed.data.header.id !== eventId)
+      throw serviceUnavailable('ESPN summary returned missing or mismatched game identity.');
+    const data = parsed.data;
+    const sides = data.header.competitions[0]?.competitors.map((competitor) => competitor.homeAway);
+    if (!sides?.includes('home') || !sides.includes('away'))
+      throw serviceUnavailable('ESPN summary is missing opposing team metadata.');
+    const game = this.normalizeEvents([data.header], sport, league)[0];
+    if (!game?.startTimeUtc) throw serviceUnavailable('ESPN summary is missing game metadata.');
+    const venue = data.gameInfo?.venue;
+    if (venue?.fullName) game.venue = venue.fullName;
+    return normalizeEspnGameDetail(data, game);
+  }
+
   private fetchJson<T>(url: string, ctx: Context): Promise<T> {
     return withRetry(
       async (attempt) => {
@@ -300,6 +377,8 @@ export class EspnService {
 
     const logos = (team.logos as unknown[]) ?? [];
     const logo = (logos[0] as Record<string, unknown>)?.href;
+    const venue = (team.franchise as { venue?: { id?: unknown; fullName?: unknown } } | undefined)
+      ?.venue;
 
     return {
       id: `espn:${String(team.id ?? '')}`,
@@ -312,13 +391,13 @@ export class EspnService {
       displayName: String(team.displayName ?? ''),
       league,
       logoUrl: logo ? String(logo) : null,
-      venueId: null,
-      venueName: null,
+      venueId: venue?.id != null ? String(venue.id) : null,
+      venueName: venue?.fullName != null ? String(venue.fullName) : null,
       source: 'espn' as const,
     };
   }
 
-  /** Fetch roster for a team — returns players grouped by position. */
+  /** Fetch active athletes from flat or position-grouped rosters. */
   async getTeamRoster(
     sport: string,
     league: string,
@@ -334,10 +413,22 @@ export class EspnService {
 
     for (const group of athletes) {
       const g = group as Record<string, unknown>;
-      const position = String(g.position ?? g.displayName ?? 'Unknown');
-      const items = (g.items as unknown[]) ?? [];
+      if (
+        league === 'nfl' &&
+        ['injuredReserveOrOut', 'suspended', 'practiceSquad'].includes(String(g.position))
+      )
+        continue;
+      const items = Array.isArray(g.items) ? g.items : [g];
       for (const item of items) {
         const player = item as Record<string, unknown>;
+        const athletePosition = player.position as
+          | { abbreviation?: string; displayName?: string; name?: string }
+          | undefined;
+        const position =
+          athletePosition?.abbreviation ??
+          athletePosition?.displayName ??
+          athletePosition?.name ??
+          'Unknown';
         const displayName = String(player.fullName ?? player.displayName ?? '');
         const jersey = player.jersey != null ? String(player.jersey) : null;
         result.push({ position, name: displayName, jersey });
@@ -355,20 +446,30 @@ export class EspnService {
   ): Promise<NormalizedStanding[]> {
     const params = new URLSearchParams();
     if (season) params.set('season', season);
-    params.set('type', '2');
     const query = params.toString() ? `?${params.toString()}` : '';
     // Use /apis/v2/ — /apis/site/v2/standings returns empty children
     const url = `${ESPN_BASE}/apis/v2/sports/${sport}/${league}/standings${query}`;
     ctx.log.debug('ESPN standings fetch', { sport, league, season });
 
-    const data = await this.fetchJson<{ children?: unknown[] }>(url, ctx);
-    const children = data?.children ?? [];
+    const data = await this.fetchJson<Record<string, unknown>>(url, ctx);
     const standings: NormalizedStanding[] = [];
-
-    for (const child of children) {
-      const c = child as Record<string, unknown>;
+    let verified = true;
+    const visit = (c: Record<string, unknown>, inheritedSeason: unknown): void => {
+      ctx.signal.throwIfAborted();
       const standingsObj = c.standings as Record<string, unknown> | undefined;
       const entries = (standingsObj?.entries as unknown[]) ?? [];
+      const ownSeason =
+        typeof c.season === 'object' && c.season !== null
+          ? (c.season as { year?: unknown }).year
+          : c.season;
+      const servedSeason = standingsObj?.season ?? ownSeason ?? inheritedSeason;
+      if (
+        season &&
+        ((ownSeason != null && String(ownSeason) !== season) ||
+          (standingsObj?.season != null && String(standingsObj.season) !== season) ||
+          (entries.length > 0 && String(servedSeason) !== season))
+      )
+        verified = false;
 
       for (let i = 0; i < entries.length; i++) {
         const entry = entries[i] as Record<string, unknown>;
@@ -376,22 +477,35 @@ export class EspnService {
         const stats = (entry.stats as unknown[]) ?? [];
 
         const statMap: Record<string, string> = {};
+        let overallRecord: RegExpMatchArray | null = null;
         for (const stat of stats) {
           const s = stat as Record<string, unknown>;
+          if (typeof s.type === 'string' && s.type.includes('_')) continue;
+          if (s.type === 'total' && s.name === 'overall') {
+            overallRecord = String(s.summary ?? s.displayValue ?? '').match(
+              /^(\d+)-(\d+)(?:-\d+)?$/,
+            );
+          }
           statMap[String(s.name ?? '')] = String(s.displayValue ?? s.value ?? '');
         }
 
         standings.push({
           rank: i + 1,
+          group: c.name != null ? String(c.name) : null,
           team: {
             id: `espn:${String(team?.id ?? '')}`,
             name: String(team?.displayName ?? ''),
             abbreviation: String(team?.abbreviation ?? ''),
           },
-          wins: Number(statMap.wins ?? 0) || 0,
-          losses: Number(statMap.losses ?? 0) || 0,
-          ties: statMap.ties != null ? Number(statMap.ties) || null : null,
-          points: statMap.points != null ? Number(statMap.points) || null : null,
+          wins: Number(statMap.wins ?? overallRecord?.[1] ?? 0) || 0,
+          losses: Number(statMap.losses ?? overallRecord?.[2] ?? 0) || 0,
+          ties: statMap.ties != null ? Number(statMap.ties) : null,
+          overtimeLosses:
+            league === 'nhl' && statMap.otLosses != null ? Number(statMap.otLosses) : null,
+          points:
+            (sport === 'soccer' || league === 'nhl') && statMap.points != null
+              ? Number(statMap.points)
+              : null,
           winningPercentage: statMap.winPercent ?? statMap.winningPercentage ?? null,
           divisionRank: null,
           streak: statMap.streak ?? null,
@@ -399,8 +513,11 @@ export class EspnService {
           source: 'espn' as const,
         });
       }
-    }
-    return standings;
+      for (const child of (c.children as Record<string, unknown>[] | undefined) ?? [])
+        visit(child, servedSeason);
+    };
+    visit(data, undefined);
+    return verified ? standings : [];
   }
 }
 

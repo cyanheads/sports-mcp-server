@@ -4,11 +4,14 @@
 
 ### Tools
 
+Eight read-only tools are registered.
+
 | Name | Description | Key Inputs | Annotations | Errors (reason → code, when) |
 |:-----|:------------|:-----------|:------------|:-----------------------------|
 | `sports_get_scores` | Live and final scores for a league (or optionally scoped to a team) on a given date. Returns each game with home/away teams, current score, status, period/clock, and UTC start time. Routes NFL/NBA/NHL/soccer → ESPN; MLB → StatsAPI. | `league` (enum), `date?` (YYYY-MM-DD), `team_name?` | `readOnlyHint: true`, `openWorldHint: true` | No games returns `games: []` with an informational `reason`; upstream failures retain HTTP classification |
+| `sports_get_game` | Game metadata, period scores, team totals, provider top performers, and scoring-play pages. | `league`, `game_id` (espn: or mlb: numeric), `offset?`, `limit?` | `readOnlyHint: true`, `openWorldHint: true` | `game_not_found` → `NotFound`, explicit missing/wrong-league event; `incompatible_game_source` → `ValidationError`, MLB ID with another league |
 | `sports_get_schedule` | Upcoming and past fixtures for a team or league. Dated requests acquire up to seven provider-calendar days, then page the games; no-bound ESPN team requests merge current-season phases and soccer fixtures. | `league` (enum), `team_name?`, `date_from?` (YYYY-MM-DD), `date_to?` (YYYY-MM-DD), `limit?`, `offset?` | `readOnlyHint: true`, `openWorldHint: true` | `team_not_found` → `NotFound`, when team_name resolves to no record; `ambiguous_team` → `ValidationError`, when several teams match |
-| `sports_get_standings` | Current standings or league table for a league and season. Returns team rank, W/L (or points), division rank, streak, and games behind. | `league` (enum), `season?` (YYYY) | `readOnlyHint: true`, `openWorldHint: true` | `season_not_found` → `NotFound`, when an explicit season has no standings data; omitted season returns empty standings with an off-season notice |
+| `sports_get_standings` | Current standings or league table for a league and season. Returns rank and group, W/L, NHL OTL, soccer/NHL points, division rank, streak, and games behind. | `league` (enum), `season?` (YYYY) | `readOnlyHint: true`, `openWorldHint: true` | `season_not_found` → `NotFound`, when an explicit season is empty or cannot be verified from served metadata; omitted season returns empty standings with an off-season notice |
 | `sports_find_team` | Resolve a team name or partial name to canonical records and merged ESPN/MLB/TheSportsDB IDs. Team-scoped tools also accept names directly. | `query`, `league?` | `readOnlyHint: true`, `openWorldHint: true` | `no_match` → `NotFound`, when no team matches the query |
 | `sports_get_team` | Team detail: active roster (or squad), latest 5 completed results, next 3 future scheduled fixtures, venue, and team metadata. Combines multiple source calls internally. | `league` (enum), `team_name` | `readOnlyHint: true`, `openWorldHint: true` | `team_not_found` → `NotFound`, when team_name resolves to no record; `ambiguous_team` → `ValidationError`, when several teams match |
 | `sports_find_player` | Resolve a player name to their canonical record via TheSportsDB. Returns player ID, full name, current team, position, nationality, birth date, and thumbnail URL. Disambiguation step before player-scoped queries. | `query`, `sport?` | `readOnlyHint: true`, `openWorldHint: true` | `no_match` → `NotFound`, when no player matches the query |
@@ -77,7 +80,7 @@ Agents route by league; the service layer picks the source.
 - Champions League: `uefa.champions`
 - MLS: `usa.1`
 
-**TheSportsDB limitations:** free tier (key `3`) returns reduced data; player search returns `relevance` but no full stats. Player bio (`strDescriptionEN`) and media (`strThumb`, `strFanart1`) are reliable; live score and standings data is NOT available on the free tier. TheSportsDB is used exclusively for player/team lookup and metadata.
+**TheSportsDB limitations:** free key `3` limits player and team searches to one record. Search notices state that results may be incomplete; `totalFound` counts returned records, and mixed team-search notices apply only to successful TheSportsDB contributions. Arbitrary configured keys are not assigned a guessed tier. Player bio (`strDescriptionEN`) and media (`strThumb`, `strFanart1`) remain metadata; live scores and standings use ESPN/MLB.
 
 ---
 
@@ -85,8 +88,8 @@ Agents route by league; the service layer picks the source.
 
 | Service | Wraps | Used By |
 |:--------|:------|:--------|
-| `EspnService` | ESPN site API (`site.api.espn.com`) | `sports_get_scores`, `sports_get_schedule`, `sports_get_standings`, `sports_find_team`, `sports_get_team` |
-| `MlbService` | MLB StatsAPI (`statsapi.mlb.com`) | `sports_get_scores` (MLB), `sports_get_schedule` (MLB), `sports_get_standings` (MLB), `sports_get_team` (MLB), `sports_find_team` |
+| `EspnService` | ESPN site API (`site.api.espn.com`) | `sports_get_scores`, `sports_get_game`, `sports_get_schedule`, `sports_get_standings`, `sports_find_team`, `sports_get_team` |
+| `MlbService` | MLB StatsAPI (`statsapi.mlb.com`) | `sports_get_scores` (MLB), `sports_get_game` (MLB), `sports_get_schedule` (MLB), `sports_get_standings` (MLB), `sports_get_team` (MLB), `sports_find_team` |
 | `TheSportsDbService` | TheSportsDB (`thesportsdb.com/api/v1/json/3/`) | `sports_find_team`, `sports_find_player`, `sports_get_player` |
 
 Each service owns its own HTTP fetch, error mapping, and retry config. Tools compose across services internally; the service boundary is invisible to agents.
@@ -105,7 +108,7 @@ Optional ESPN/MLB team-search sources and MLB standings abbreviation enrichment 
 
 | Env Var | Required | Description |
 |:--------|:---------|:------------|
-| `THESPORTSDB_API_KEY` | No | TheSportsDB API key. Defaults to `3` (free public test key). Replace with a paid key for higher rate limits and full data access. |
+| `THESPORTSDB_API_KEY` | No | TheSportsDB API key. Defaults to `3`, whose team/player searches have a one-record limit. A premium key enables broader searches. |
 
 No other env vars required — ESPN and MLB StatsAPI are fully keyless.
 
@@ -169,11 +172,13 @@ interface NormalizedTeam {
 // Standing entry
 interface NormalizedStanding {
   rank: number;
+  group: string | null;
   team: { id: string; name: string; abbreviation: string };
   wins: number;
   losses: number;
   ties: number | null;
-  points: number | null;         // soccer league table
+  overtimeLosses: number | null; // NHL
+  points: number | null;         // soccer/NHL
   winningPercentage: string | null;
   divisionRank: string | null;
   streak: string | null;          // normalize: ESPN stats[name='streak'].displayValue ('W3'), MLB streak.streakCode ('L3')
@@ -229,6 +234,14 @@ const LEAGUE_ROUTES: Record<string, LeagueRoute> = {
 
 ## Design Decisions
 
+### Game IDs resolve with an explicit league
+
+Existing score, schedule, and team game IDs stay unchanged. `sports_get_game` requires their league because ESPN event IDs do not encode routing; cross-league probing adds latency and ambiguity. ESPN summaries supply metadata, period lines, team totals, nested game leaders, and scoring events from `scoringPlays`, scored `plays`, or soccer goal `keyEvents`. MLB uses the v1.1 live feed for inning lines, boxscore team totals and provider `topPerformers`, and scoring indexes into `allPlays`.
+
+Played sections are empty for scheduled games: ESPN can supply season leaders and MLB pregame totals include aggregate rates. Full player boxscores and season statistics are outside this tool's scope. Missing values remain null; an unplayed MLB bottom inning is never synthesized as zero. Athlete names may be unavailable on provider scoring events. Explicit missing-event HTTP signatures map to `game_not_found`; unrelated rejections, outages, cancellation, and malformed success metadata keep their own error classification.
+
+Only normalized scoring events are paged, with 20 events by default and a cap of 50. Metadata, period lines, totals, and leaders remain available on every page. Enrichment carries total/returned counts, zero-based served range, continuation, effective limit, and clipped-limit notices to both response surfaces. Each page refetches the summary/feed; changing live games are not an immutable snapshot.
+
 ### MLB routes to StatsAPI, everything else to ESPN
 
 StatsAPI is the official MLB data source — it provides `gamePk`, detailed `linescore` with inning-by-inning runs/hits/errors, `decisions` (winning/losing pitcher), and a full roster endpoint. MLB scores, schedules, standings, and team detail use StatsAPI; `sports_find_team` also consults ESPN for cross-source IDs.
@@ -247,6 +260,8 @@ Live event data from TheSportsDB (eventsday, eventslastleague) returns empty or 
 ### ESPN standings use `/apis/v2/` not `/apis/site/v2/`
 
 Live-probed: `site.api.espn.com/apis/site/v2/sports/football/nfl/standings` returns `{"fullViewLink": ..., "children": []}` — the children array is empty. The correct path is `site.api.espn.com/apis/v2/sports/football/nfl/standings`, which returns `children` with `standings.entries` populated. Both the `site` path and the base path exist; the base path is canonical for standings.
+
+Omit the type override because provider defaults expose soccer and college tables that `type=2` hides. Walk nested groups, preserving each ranking group's name. Explicit years must match root/group season metadata; missing metadata cannot justify relabeling returned current data. Overall stat identities take precedence over home/away/conference names; an explicit overall record supplies missing scalar totals.
 
 ### `sports_find_team` returns cross-source IDs for disambiguation
 
@@ -272,7 +287,7 @@ No-bound league reads retain their provider default. ESPN no-bound team reads me
 
 ### Third-party text stays data
 
-Inline provider fields (names, abbreviations, IDs, team/location/venue labels, dates, scores, streaks, URLs, and roster details) and echoed caller filters flatten CR/LF in all seven formatters. Authored Markdown keeps its own line breaks. Player biographies are rendered in full inside a text fence longer than every embedded backtick run. Structured output remains verbatim. Server instructions explicitly identify provider content as data, never instructions; formatting does not attempt to prove or enforce model behavior.
+Inline provider fields (names, abbreviations, IDs, team/location/venue labels, dates, scores, streaks, URLs, and roster details) and echoed caller filters flatten CR/LF in all eight formatters. Authored Markdown keeps its own line breaks. Player biographies are rendered in full inside a text fence longer than every embedded backtick run. Structured output remains verbatim. Server instructions explicitly identify provider content as data, never instructions; formatting does not attempt to prove or enforce model behavior.
 
 ---
 
@@ -285,11 +300,12 @@ Base: `https://site.api.espn.com`
 | Endpoint | Pattern | Live-verified |
 |:---------|:--------|:-------------|
 | Scoreboard | `GET /apis/site/v2/sports/{sport}/{league}/scoreboard[?dates=YYYYMMDD]`; basketball `groups=50`, football `groups=80` | NFL, NBA, NHL, soccer EPL/MLS; paired ranges are acquired one day at a time |
+| Game summary | `GET /apis/site/v2/sports/{sport}/{league}/summary?event={eventId}` | Completed NFL/NBA/NHL/EPL and scheduled NFL; scoring sections vary by sport |
 | Schedule (team) | `GET /apis/site/v2/sports/{sport}/{league}/teams/{teamId}/schedule[?season=YYYY&seasontype=N]`; soccer `fixture=true` | NFL, NBA, soccer; merged for no-bound team queries. Dated team queries use scoreboard membership |
 | Teams list | `GET /apis/site/v2/sports/{sport}/{league}/teams`; college `limit=1000` | NFL and complete college inventories; scoreboard queries never reuse this limit |
 | Team detail | `GET /apis/site/v2/sports/{sport}/{league}/teams/{teamId}` | ✓ NFL team 26 |
-| Team roster | `GET /apis/site/v2/sports/{sport}/{league}/teams/{teamId}/roster` | ✓ NFL team 26 (grouped by position: `athletes[].position`, `athletes[].items[]`) |
-| Standings | `GET /apis/v2/sports/{sport}/{league}/standings[?season=YYYY&type=2]` | ✓ NFL, soccer EPL |
+| Team roster | `GET /apis/site/v2/sports/{sport}/{league}/teams/{teamId}/roster` | Flat NBA/soccer athletes and grouped NFL/NHL items; positions come from each athlete, and explicitly inactive NFL groups are excluded |
+| Standings | `GET /apis/v2/sports/{sport}/{league}/standings[?season=YYYY]` | Provider-default tables, including nested college groups |
 
 Response shape (scoreboard):
 - `events[].shortName` — `"SEA @ NYY"` format
@@ -315,7 +331,8 @@ Base: `https://statsapi.mlb.com/api/v1`
 | Endpoint | Pattern | Live-verified |
 |:---------|:--------|:-------------|
 | Schedule | `GET /schedule?sportId=1&hydrate=team,linescore,decisions` with `date=YYYY-MM-DD` or `startDate`/`endDate` | ✓ individual date and inclusive range |
-| Standings | `GET /standings?leagueId=103,104&season=YYYY` | ✓ 6 division records |
+| Game live feed | `GET https://statsapi.mlb.com/api/v1.1/game/{gamePk}/feed/live` | Completed and scheduled MLB; unplayed innings preserve omitted runs |
+| Standings | `GET /standings?leagueId=103,104&season=YYYY&hydrate=division,league` | Historical division names hydrate within the existing standings request |
 | Teams | `GET /teams?sportId=1&season=YYYY` | ✓ 30 teams |
 | Roster | `GET /teams/{teamId}/roster?season=YYYY&rosterType=active` | ✓ 26-man roster |
 
@@ -328,7 +345,7 @@ Schedule response:
 - `dates[].games[].linescore.inningHalf` — `"Top"` / `"Bottom"`
 
 Standings response:
-- `records[].division.nameShort` (may be null) — use `division.id` as fallback
+- `records[].division.name` — upstream ranking group; retain null if unavailable, never invent labels from IDs
 - `records[].teamRecords[].team.name`, `.wins`, `.losses`, `.winningPercentage`, `.divisionRank`
 
 ### TheSportsDB (free tier, key `3`)
@@ -337,7 +354,7 @@ Base: `https://www.thesportsdb.com/api/v1/json/3`
 
 | Endpoint | Pattern | Live-verified |
 |:---------|:--------|:-------------|
-| Team search | `GET /searchteams.php?t={name}` | ✓ 10 results for "Arsenal" |
+| Team search | `GET /searchteams.php?t={name}` | Free key `3` has a one-record limit |
 | Player search | `GET /searchplayers.php?p={name}` | ✓ Shohei Ohtani |
 | Player lookup | `GET /lookupplayer.php?id={idPlayer}` | ✓ full bio |
 | Team lookup | `GET /lookupteam.php?id={idTeam}` | ✓ includes `idESPN` cross-ref |
@@ -345,16 +362,16 @@ Base: `https://www.thesportsdb.com/api/v1/json/3`
 
 Error shape: returns `{"players": "Invalid Player ID passed"}` (HTTP 200, success body with error string) for bad player IDs. Must check `typeof response.players === 'string'` to detect errors. Same pattern for teams: `{"teams": null}`.
 
-TheSportsDB `idESPN` on team records cross-references to the ESPN team ID — useful for matching across sources.
+TheSportsDB `idESPN` on team and player records supplies an ESPN cross-reference. Player normalization retains nonempty, nonzero values without name matching.
 
 ---
 
 ## Known Limitations
 
 - **TheSportsDB free tier returns no live scores or standings.** `eventsday.php` reliably returns 0 events on the free tier even during active match days. Player and team metadata is the only reliable data from this source on key `3`.
-- **ESPN is undocumented and unofficial.** Schema changes could break the service layer without warning. EspnService is isolated with explicit normalization so any shape change is contained to one file.
+- **ESPN is undocumented and unofficial.** Schema changes could break the service layer without warning. ESPN requests and normalization are isolated in `src/services/espn/`, including the game-summary normalizer.
 - **College coverage is explicit.** Men's basketball scoreboards cover Division I; football scoreboards cover FBS. College team inventories can contain programs outside scoreboard scope; standings depth and roster data vary.
 - **NHL standings: no `winPercent` stat.** NHL uses a points system (wins/OT losses/losses); the `winPercent` stat ESPN returns for NFL/NBA is absent from NHL standings entries. `NormalizedStanding.winningPercentage` will always be null for NHL; use `points` instead.
-- **MLB StatsAPI division names can be null.** `records[].division.nameShort` was null in a live probe of the 2026 standings — use `division.id` to map to division names from the teams endpoint.
+- **MLB StatsAPI division names can be null.** Hydrate division/league metadata for the requested season and preserve null when its name is unavailable.
 - **Provider calendar dates can differ from UTC start dates.** Both output surfaces retain the provider's UTC start string. An MLB provider-applied date range retains late games even when their UTC start falls on the next day.
 - **Historical coverage varies by provider.** ESPN date scoreboards include historical seasons, but deep-history availability is not guaranteed. TheSportsDB free tier does not supply scores; MLB StatsAPI covers historical MLB schedules back to 1871.

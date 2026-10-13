@@ -13,6 +13,52 @@ import { MlbService } from '@/services/mlb/mlb-service.js';
 describe('MlbService', () => {
   const ctx = createMockContext();
   const svc = new MlbService();
+  it('hydrates historical division names without a separate lookup', async () => {
+    vi.mocked(fetch)
+      .mockReset()
+      .mockImplementation(async (input) => {
+        const url = new URL(String(input));
+        if (url.pathname.endsWith('/standings')) {
+          return Response.json({
+            records: [
+              {
+                division: { name: 'American League West', season: '1993' },
+                teamRecords: [
+                  {
+                    team: { id: 117, name: 'Houston Astros' },
+                    divisionRank: '1',
+                    wins: 0,
+                    losses: 0,
+                  },
+                ],
+              },
+            ],
+          });
+        }
+        return Response.json({ teams: [{ id: 117, abbreviation: 'HOU' }] });
+      });
+    await expect(svc.getStandings('1993', ctx)).resolves.toMatchObject([
+      {
+        group: 'American League West',
+        overtimeLosses: null,
+        wins: 0,
+        losses: 0,
+        team: { abbreviation: 'HOU' },
+      },
+    ]);
+    expect(fetch).toHaveBeenCalledTimes(2);
+    const urls = vi.mocked(fetch).mock.calls.map(([input]) => new URL(String(input)));
+    expect(
+      urls.find((url) => url.pathname.endsWith('/standings'))?.searchParams.get('hydrate'),
+    ).toBe('division,league');
+    expect(urls.every((url) => url.searchParams.get('season') === '1993')).toBe(true);
+  });
+  it('preserves empty standings', async () => {
+    vi.mocked(fetch)
+      .mockReset()
+      .mockImplementation(async () => Response.json({}));
+    await expect(svc.getStandings('2025', ctx)).resolves.toEqual([]);
+  });
 
   it('preserves both bounds in a range schedule request', async () => {
     vi.mocked(fetch).mockResolvedValueOnce(Response.json({ dates: [] }));

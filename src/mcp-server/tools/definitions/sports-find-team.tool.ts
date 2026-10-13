@@ -5,6 +5,7 @@
 
 import { tool, z } from '@cyanheads/mcp-ts-core';
 import { JsonRpcErrorCode } from '@cyanheads/mcp-ts-core/errors';
+import { getServerConfig } from '@/config/server-config.js';
 import { getEspnService } from '@/services/espn/espn-service.js';
 import { getMlbService } from '@/services/mlb/mlb-service.js';
 import { rethrowTerminalProviderError } from '@/services/provider-errors.js';
@@ -80,8 +81,21 @@ export const sportsFindTeam = tool('sports_find_team', {
       )
       .describe('Matching teams found across sources.'),
     query: z.string().describe('The search query used.'),
-    totalFound: z.number().describe('Total number of matching records.'),
+    totalFound: z
+      .number()
+      .describe(
+        'Number of matching records returned after deduplication, not a total of all available matches.',
+      ),
   }),
+
+  enrichment: {
+    notice: z
+      .string()
+      .optional()
+      .describe(
+        'Completeness guidance for TheSportsDB search contributions; ESPN and MLB contributions are unaffected.',
+      ),
+  },
 
   errors: [
     {
@@ -116,6 +130,7 @@ export const sportsFindTeam = tool('sports_find_team', {
       }
       results.push(t);
     }
+    const tsdbContributed = results.length > 0;
 
     // 2. ESPN and/or MLB team list search for the given league
     if (input.league) {
@@ -204,6 +219,12 @@ export const sportsFindTeam = tool('sports_find_team', {
       throw ctx.fail('no_match', `No team found matching "${input.query}".`, {
         ...ctx.recoveryFor('no_match'),
       });
+    }
+
+    if (tsdbContributed && getServerConfig().theSportsDbApiKey === '3') {
+      ctx.enrich.notice(
+        'TheSportsDB free-key search contributions may be incomplete (one-record limit). Try a fuller name or a premium key. ESPN and MLB results are unaffected by this limit.',
+      );
     }
 
     return {

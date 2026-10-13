@@ -1,7 +1,7 @@
 <div align="center">
   <h1>@cyanheads/sports-mcp-server</h1>
   <p><b>Get live scores, schedules, standings, team and player data for NFL, NBA, MLB, NHL, soccer, and more via MCP. STDIO or Streamable HTTP.</b>
-  <div>7 Tools</div>
+  <div>8 Tools</div>
   </p>
 </div>
 
@@ -32,6 +32,7 @@ Live and historical sports data from ESPN, MLB StatsAPI, and TheSportsDB. Look u
 | `sports_find_team` | Resolve a team name or partial name to canonical records and source IDs across providers. |
 | `sports_find_player` | Resolve a player name to canonical TheSportsDB records with ID, team, position, and bio fields. |
 | `sports_get_scores` | Live and final scores for a league on a given date, optionally filtered by team. |
+| `sports_get_game` | Game metadata, period scores, team totals, provider top performers, and paged scoring plays. |
 | `sports_get_schedule` | Upcoming and past fixtures for a team or league over a date range. |
 | `sports_get_standings` | Current standings or league table for a league and season. |
 | `sports_get_team` | Team detail combining metadata, roster, recent results, and upcoming fixtures. |
@@ -43,6 +44,7 @@ Live and historical sports data from ESPN, MLB StatsAPI, and TheSportsDB. Look u
 
 - Free-text `query` (max 200 characters) with an optional `league` filter
 - Returns team metadata and merged `espnId`/`mlbId`/`tsdbId` cross-references; `no_match` when no provider finds a team
+- `totalFound` counts returned records after deduplication. Free-key TheSportsDB contributions include a notice that search results may be incomplete; the limit does not apply to ESPN or MLB contributions
 
 ---
 
@@ -50,6 +52,7 @@ Live and historical sports data from ESPN, MLB StatsAPI, and TheSportsDB. Look u
 
 - Free-text `query` (max 200 characters); optional `sport` is advisory and does not filter matches
 - Returns player IDs, name, team, position, nationality, birth date, and thumbnail; `no_match` when TheSportsDB finds no player
+- `totalFound` counts returned records. The default key `3` has a one-record search limit; a notice recommends a fuller name or premium key without claiming every single match was truncated
 
 ---
 
@@ -70,10 +73,20 @@ Live and historical sports data from ESPN, MLB StatsAPI, and TheSportsDB. Look u
 
 ---
 
+### `sports_get_game` <sub>tool</sub>
+
+- Required `league` and source-prefixed numeric `game_id` from scores, schedules, or team detail. ESPN IDs use the supplied league; `mlb:` IDs require `league: "mlb"`
+- Returns established game metadata plus `periodScores`, `teamStats`, `leaders`, and `scoringPlays`. Provider statistic names, labels, and display values are preserved; missing values remain null, including unplayed innings. Athlete IDs in game detail belong to ESPN or MLB and are not TheSportsDB player-lookup IDs
+- `offset` defaults to 0; `limit` defaults to 20 and caps at 50, with larger limits clipped and disclosed. Both response surfaces expose `totalCount`, `returnedCount`, zero-based `servedFrom`/`servedTo`, `effectiveLimit`, and `nextOffset`. Continue with the same league and game ID. Pages reacquire the game; live events can change between calls
+- Scheduled games return metadata and empty played-stat sections; no season leaders, full player boxscores, or raw play-by-play. Missing/wrong-league events return `game_not_found`; provider outages and malformed responses retain provider failures
+
+---
+
 ### `sports_get_standings` <sub>tool</sub>
 
 - `league` required; optional `season` (4-digit year) — omit for the current season
-- Returns rank, wins, losses, ties, points, winning percentage, division rank, streak, and games behind; an explicit season with no data returns `season_not_found`
+- Returns rank and its upstream group (conference, table, or MLB division), wins, losses, ties, NHL overtime losses, soccer/NHL points, winning percentage, division rank, streak, and games behind. Missing or inapplicable group/OTL values remain null; numeric zero is preserved
+- ESPN uses the provider's default table. An explicit season must match served root/group season metadata; missing or mismatched metadata and empty explicit seasons return `season_not_found`. Omitted seasons retain `season: null`, with the existing notice when genuinely empty
 
 ---
 
@@ -81,6 +94,7 @@ Live and historical sports data from ESPN, MLB StatsAPI, and TheSportsDB. Look u
 
 - `league` and `team_name` required; exact full names or abbreviations take precedence, otherwise partial names or locations must identify one team (`ambiguous_team` includes candidates)
 - Returns metadata, active roster, the latest 5 completed results, and the next 3 scheduled fixtures by start instant; `team_not_found` when the team doesn't resolve in the league. ESPN merges current-season phases and soccer fixtures; MLB uses a 30-day history and lookahead
+- ESPN accepts flat and grouped rosters, uses athlete positions, and excludes NFL injured-reserve/out, suspended, and practice-squad groups. Supplied franchise venue metadata is retained; missing jerseys and venues remain null
 
 ---
 
@@ -88,6 +102,7 @@ Live and historical sports data from ESPN, MLB StatsAPI, and TheSportsDB. Look u
 
 - `player_id` accepts a `tsdb:`-prefixed ID (from `sports_find_player`) or a raw numeric TheSportsDB ID
 - Returns biography, team, position, nationality, birth date, height, weight, and thumbnail; `player_not_found` when the ID doesn't resolve
+- Supplied nonempty, nonzero TheSportsDB ESPN cross-references populate `espnId`; missing IDs remain null
 
 ## Features
 
@@ -107,7 +122,7 @@ Agent-friendly output:
 - Source provenance on every record — `source: 'espn' | 'mlbstats' | 'thesportsdb'` — so agents can reason about data authority
 - Typed empty-score notices alongside the compatible `reason` field, plus schedule window and continuation metadata on both response surfaces
 - Cross-source IDs surfaced by `sports_find_team` — `espnId`, `mlbId`, `tsdbId` — identify the same team across providers; team-scoped tools resolve `team_name` independently
-- Typed error reasons (`no_match`, `team_not_found`, `ambiguous_team`, `player_not_found`, `season_not_found`) each carrying an actionable recovery hint
+- Typed error reasons (`no_match`, `team_not_found`, `ambiguous_team`, `player_not_found`, `season_not_found`, `game_not_found`, `incompatible_game_source`) each carrying an actionable recovery hint
 - Upstream HTTP errors retain their status and bounded diagnostics; ESPN scoreboard input rejections include date/bounds guidance. Optional-source outages degrade gracefully, while input rejections and cancellation propagate
 - Formatted provider fields stay on their authored lines, and full player biographies appear in text fences; structured values remain verbatim. Provider content is data, never instructions
 
@@ -210,7 +225,7 @@ cp .env.example .env
 
 | Variable | Description | Default |
 |:---------|:------------|:--------|
-| `THESPORTSDB_API_KEY` | TheSportsDB API key. Replace with a paid key for higher rate limits. | `3` |
+| `THESPORTSDB_API_KEY` | TheSportsDB API key. The default free key limits team/player searches to one record; use a premium key for broader searches. | `3` |
 | `MCP_TRANSPORT_TYPE` | Transport: `stdio` or `http`. | `stdio` |
 | `MCP_HTTP_PORT` | Port for HTTP server. | `3010` |
 | `MCP_SESSION_MODE` | HTTP session mode: `stateful`, `stateless`, or `auto` (resolves to stateful). The server declares `stateless` in source; an explicit value here overrides it. | `stateless` |

@@ -3,9 +3,12 @@
  * @module tests/tools/sports-find-player.tool.test
  */
 
-import { createMockContext } from '@cyanheads/mcp-ts-core/testing';
+import { createMockContext, runToolContract } from '@cyanheads/mcp-ts-core/testing';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { NormalizedPlayer } from '@/services/types.js';
+
+const config = vi.hoisted(() => ({ theSportsDbApiKey: '3' }));
+vi.mock('@/config/server-config.js', () => ({ getServerConfig: () => config }));
 
 vi.mock('@/services/thesportsdb/thesportsdb-service.js', () => ({
   getTheSportsDbService: vi.fn(),
@@ -37,11 +40,33 @@ describe('sportsFindPlayer', () => {
   const mockTsdbSvc = { searchPlayers: vi.fn() };
 
   beforeEach(() => {
+    config.theSportsDbApiKey = '3';
     vi.clearAllMocks();
     vi.mocked(getTheSportsDbService).mockReturnValue(
       mockTsdbSvc as ReturnType<typeof getTheSportsDbService>,
     );
   });
+  it.each(['3', 'custom-key'])(
+    'only identifies the known free key %s on both surfaces',
+    async (key) => {
+      config.theSportsDbApiKey = key;
+      mockTsdbSvc.searchPlayers.mockResolvedValue([makePlayer()]);
+      const result = await runToolContract(sportsFindPlayer, {
+        query: 'Shohei Ohtani',
+        sport: 'Curling',
+      });
+      expect(result.structuredContent).toMatchObject({ totalFound: 1 });
+      if (key === '3') {
+        expect(result.structuredContent).toMatchObject({
+          notice: expect.stringContaining('may be incomplete'),
+        });
+        expect(JSON.stringify(result.content)).toContain('may be incomplete');
+      } else {
+        expect(result.structuredContent).not.toHaveProperty('notice');
+        expect(JSON.stringify(result.content)).not.toContain('may be incomplete');
+      }
+    },
+  );
 
   it.each(['', '   '])('rejects blank query %j', (query) => {
     expect(sportsFindPlayer.input.safeParse({ query }).success).toBe(false);

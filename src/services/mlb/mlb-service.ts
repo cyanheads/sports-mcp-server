@@ -5,12 +5,18 @@
 
 import type { Context } from '@cyanheads/mcp-ts-core';
 import type { AppConfig } from '@cyanheads/mcp-ts-core/config';
-import { serviceUnavailable } from '@cyanheads/mcp-ts-core/errors';
+import {
+  JsonRpcErrorCode,
+  McpError,
+  notFound,
+  serviceUnavailable,
+} from '@cyanheads/mcp-ts-core/errors';
 import type { StorageService } from '@cyanheads/mcp-ts-core/storage';
 import { withRetry } from '@cyanheads/mcp-ts-core/utils';
 import { fetchProviderText } from '../fetch-provider-text.js';
 import { rethrowTerminalProviderError } from '../provider-errors.js';
-import type { NormalizedGame, NormalizedStanding, NormalizedTeam } from '../types.js';
+import type { GameDetail, NormalizedGame, NormalizedStanding, NormalizedTeam } from '../types.js';
+import { normalizeMlbGameDetail } from './mlb-game-detail.js';
 
 const MLB_BASE = 'https://statsapi.mlb.com/api/v1';
 
@@ -26,6 +32,38 @@ function mapMlbStatus(abstractState: string, detailedState: string): NormalizedG
 }
 
 export class MlbService {
+  /** Resolve a gamePk with the v1.1 live feed, including inning and scoring-play data. */
+  async getGame(gamePk: string, ctx: Context): Promise<GameDetail> {
+    let data: unknown;
+    try {
+      data = await this.fetchJson(
+        `https://statsapi.mlb.com/api/v1.1/game/${gamePk}/feed/live`,
+        ctx,
+      );
+    } catch (error: unknown) {
+      if (
+        !ctx.signal.aborted &&
+        error instanceof McpError &&
+        error.code === JsonRpcErrorCode.InvalidParams
+      ) {
+        let body: { messageNumber?: unknown; message?: unknown } | undefined;
+        try {
+          body = JSON.parse(String(error.data?.body ?? ''));
+        } catch {
+          /* An unrelated non-JSON failure retains its original classification. */
+        }
+        if (body?.messageNumber === 11 && body.message === `Invalid Request with value: ${gamePk}`)
+          throw notFound(
+            'No MLB game exists for this ID.',
+            { reason: 'game_not_found' },
+            { cause: error },
+          );
+      }
+      throw error;
+    }
+    return normalizeMlbGameDetail(data, gamePk);
+  }
+
   private fetchJson<T>(url: string, ctx: Context): Promise<T> {
     return withRetry(
       async (attempt) => {
@@ -179,14 +217,14 @@ export class MlbService {
   /** Fetch standings for a season (defaults to current year). */
   async getStandings(season: string | null, ctx: Context): Promise<NormalizedStanding[]> {
     const yr = season ?? new Date().getFullYear().toString();
-    const url = `${MLB_BASE}/standings?leagueId=103,104&season=${yr}`;
+    const url = `${MLB_BASE}/standings?leagueId=103,104&season=${yr}&hydrate=division,league`;
     ctx.log.debug('MLB standings fetch', { season: yr });
 
     // Fetch teams in parallel to build an id→abbreviation map.
     // The standings endpoint omits team abbreviation; the teams endpoint has it.
     const [data, teamsData] = await Promise.all([
       this.fetchJson<{ records?: unknown[] }>(url, ctx),
-      this.fetchJson<{ teams?: unknown[] }>(`${MLB_BASE}/teams?sportId=1`, ctx).catch(
+      this.fetchJson<{ teams?: unknown[] }>(`${MLB_BASE}/teams?sportId=1&season=${yr}`, ctx).catch(
         (error: unknown) => {
           rethrowTerminalProviderError(error, ctx);
           return { teams: [] as unknown[] };
@@ -215,6 +253,8 @@ export class MlbService {
         const teamId = String(team?.id ?? '');
 
         standings.push({
+          group: (record.division as { name?: string } | undefined)?.name ?? null,
+          overtimeLosses: null,
           rank: typeof t.divisionRank === 'string' ? parseInt(t.divisionRank, 10) || 0 : 0,
           team: {
             id: `mlb:${teamId}`,

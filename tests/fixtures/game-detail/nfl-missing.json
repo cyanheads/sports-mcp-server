@@ -1,0 +1,6 @@
+{
+  "url": "https://site.api.espn.com/apis/site/v2/sports/football/nfl/summary?event=999999999999",
+  "status": 400,
+  "capturedAt": "2026-10-13T13:41:07.567Z",
+  "body": "{\"code\":400,\"message\":\"Error invoking GET: http://sports.core.api.espn.pvt/v2/sports/football/leagues/nfl/events/999999999999, status=400, duration=7 ms, message=null, cache=CACHE_MISS\"}"
+}

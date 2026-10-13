@@ -173,3 +173,192 @@ describe('EspnService.normalizeEvents', () => {
     }
   });
 });
+
+describe('EspnService team metadata and active rosters', () => {
+  const svc = new EspnService();
+  it.each(['nba', 'eng.1'])('normalizes flat %s athletes using their positions', async (league) => {
+    stubFetch({ athletes: [{ fullName: 'Player', position: { abbreviation: 'G' } }] });
+    await expect(
+      svc.getTeamRoster('basketball', league, '1', createMockContext()),
+    ).resolves.toEqual([{ name: 'Player', position: 'G', jersey: null }]);
+  });
+  it('excludes inactive NFL groups and keeps athlete positions in active groups', async () => {
+    stubFetch({
+      athletes: ['offense', 'defense', 'injuredReserveOrOut', 'suspended', 'practiceSquad'].map(
+        (position) => ({
+          position,
+          items: [{ fullName: position, position: { abbreviation: 'QB' }, jersey: '7' }],
+        }),
+      ),
+    });
+    await expect(svc.getTeamRoster('football', 'nfl', '26', createMockContext())).resolves.toEqual([
+      { name: 'offense', position: 'QB', jersey: '7' },
+      { name: 'defense', position: 'QB', jersey: '7' },
+    ]);
+  });
+  it('retains grouped NHL athletes', async () => {
+    stubFetch({
+      athletes: [
+        {
+          position: 'goalies',
+          items: [{ displayName: 'Goalie', position: { abbreviation: 'G' }, jersey: '0' }],
+        },
+      ],
+    });
+    await expect(svc.getTeamRoster('hockey', 'nhl', '1', createMockContext())).resolves.toEqual([
+      { name: 'Goalie', position: 'G', jersey: '0' },
+    ]);
+  });
+  it('retains franchise venue metadata', async () => {
+    stubFetch({ team: { id: '26', franchise: { venue: { id: 3673, fullName: 'Lumen Field' } } } });
+    await expect(
+      svc.getTeamDetail('football', 'nfl', '26', createMockContext()),
+    ).resolves.toMatchObject({ venueId: '3673', venueName: 'Lumen Field' });
+  });
+  it('preserves missing team and empty roster behavior', async () => {
+    stubFetch({});
+    await expect(
+      svc.getTeamDetail('football', 'nfl', '26', createMockContext()),
+    ).resolves.toBeNull();
+    await expect(svc.getTeamRoster('football', 'nfl', '26', createMockContext())).resolves.toEqual(
+      [],
+    );
+  });
+});
+
+describe('EspnService standings', () => {
+  const svc = new EspnService();
+  const entry = {
+    team: { id: '1', displayName: 'Team', abbreviation: 'T' },
+    stats: [
+      { name: 'wins', type: 'wins', value: 5 },
+      { name: 'losses', type: 'losses', value: 1 },
+    ],
+  };
+  it('uses the provider default type and traverses nested ranking groups', async () => {
+    vi.mocked(fetch).mockClear();
+    stubFetch({
+      season: { year: 2026 },
+      children: [
+        { name: 'Conference', children: [{ name: 'Division', standings: { entries: [entry] } }] },
+      ],
+    });
+    await expect(
+      svc.getStandings('football', 'college-football', '2026', createMockContext()),
+    ).resolves.toMatchObject([{ group: 'Division', wins: 5 }]);
+    expect(new URL(String(vi.mocked(fetch).mock.calls[0][0])).searchParams.has('type')).toBe(false);
+  });
+  it.each([
+    {},
+    { season: { year: 2025 } },
+    { children: [{ standings: { season: 2025, entries: [entry] } }] },
+  ])('refuses unverified or mismatched explicit seasons %j', async (metadata) => {
+    stubFetch({ children: [{ standings: { entries: [entry] } }], ...metadata });
+    await expect(svc.getStandings('football', 'nfl', '1899', createMockContext())).resolves.toEqual(
+      [],
+    );
+  });
+  it('accepts a season verified only at group standings metadata', async () => {
+    stubFetch({ children: [{ standings: { season: 2025, entries: [entry] } }] });
+    await expect(
+      svc.getStandings('football', 'nfl', '2025', createMockContext()),
+    ).resolves.toHaveLength(1);
+  });
+  it('rejects conflicting nested seasons and an unverified sibling table', async () => {
+    for (const sibling of [
+      { standings: { season: 2025, entries: [entry] } },
+      { standings: { entries: [entry] } },
+    ]) {
+      stubFetch({
+        children: [{ children: [{ standings: { season: 2026, entries: [entry] } }, sibling] }],
+      });
+      await expect(
+        svc.getStandings('football', 'college-football', '2026', createMockContext()),
+      ).resolves.toEqual([]);
+    }
+    stubFetch({
+      season: { year: 2025 },
+      children: [{ standings: { season: 2026, entries: [entry] } }],
+    });
+    await expect(svc.getStandings('football', 'nfl', '2026', createMockContext())).resolves.toEqual(
+      [],
+    );
+  });
+  it('keeps overall stats, zero ties, group and NHL overtime losses', async () => {
+    stubFetch({
+      children: [
+        {
+          name: 'Eastern Conference',
+          standings: {
+            entries: [
+              {
+                ...entry,
+                stats: [
+                  ...entry.stats,
+                  { name: 'wins', type: 'homerecord_wins', value: 2 },
+                  { name: 'losses', type: 'awayrecord_losses', value: 0 },
+                  { name: 'ties', type: 'ties', value: 0 },
+                  { name: 'otLosses', value: 7 },
+                  { name: 'points', value: 17 },
+                ],
+              },
+            ],
+          },
+        },
+      ],
+    });
+    await expect(
+      svc.getStandings('hockey', 'nhl', null, createMockContext()),
+    ).resolves.toMatchObject([
+      { group: 'Eastern Conference', wins: 5, losses: 1, ties: 0, overtimeLosses: 7, points: 17 },
+    ]);
+  });
+  it('uses the explicit overall record when college scalar losses are omitted', async () => {
+    stubFetch({
+      children: [
+        {
+          name: 'American Conference',
+          standings: {
+            entries: [
+              {
+                ...entry,
+                stats: [
+                  { name: 'wins', type: 'wins', value: 5 },
+                  { name: 'overall', type: 'total', summary: '5-1', displayValue: '5-1' },
+                  { name: 'Home', type: 'homerecord', summary: '3-0' },
+                  { name: 'wins', type: 'homerecord_wins', value: 3 },
+                ],
+              },
+            ],
+          },
+        },
+      ],
+    });
+    await expect(
+      svc.getStandings('football', 'college-football', null, createMockContext()),
+    ).resolves.toMatchObject([{ wins: 5, losses: 1 }]);
+  });
+  it('omits NBA scoring points and keeps soccer zero points', async () => {
+    stubFetch({
+      children: [{ standings: { entries: [{ ...entry, stats: [{ name: 'points', value: 0 }] }] } }],
+    });
+    await expect(
+      svc.getStandings('basketball', 'nba', null, createMockContext()),
+    ).resolves.toMatchObject([{ points: null, overtimeLosses: null, group: null }]);
+    await expect(
+      svc.getStandings('soccer', 'eng.1', null, createMockContext()),
+    ).resolves.toMatchObject([{ points: 0 }]);
+  });
+  it('preserves empty current standings', async () => {
+    stubFetch({ children: [] });
+    await expect(svc.getStandings('soccer', 'eng.1', null, createMockContext())).resolves.toEqual(
+      [],
+    );
+  });
+  it('normalizes available direct groups', async () => {
+    stubFetch({ children: [{ standings: { entries: [entry] } }] });
+    await expect(
+      svc.getStandings('football', 'nfl', null, createMockContext()),
+    ).resolves.toMatchObject([{ wins: 5, losses: 1 }]);
+  });
+});

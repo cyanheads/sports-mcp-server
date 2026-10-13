@@ -55,7 +55,11 @@ export const sportsGetScores = tool('sports_get_scores', {
       .array(
         z
           .object({
-            id: z.string().describe('Source-prefixed game ID, e.g. espn:401872656 or mlb:823457.'),
+            id: z
+              .string()
+              .describe(
+                'Source-prefixed game ID, e.g. espn:401872656 or mlb:823457. Pass with this league to sports_get_game.',
+              ),
             shortName: z.string().describe('Short matchup string, e.g. "SEA @ NYY".'),
             homeTeam: z
               .object({

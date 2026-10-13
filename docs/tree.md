@@ -1,6 +1,6 @@
 # sports-mcp-server - Directory Structure
 
-Generated on: 2026-10-13 13:01:07
+Generated on: 2026-10-13 14:20:27
 
 ```text
 sports-mcp-server/
@@ -151,6 +151,7 @@ sports-mcp-server/
 │   │       │   ├── index.ts
 │   │       │   ├── sports-find-player.tool.ts
 │   │       │   ├── sports-find-team.tool.ts
+│   │       │   ├── sports-get-game.tool.ts
 │   │       │   ├── sports-get-player.tool.ts
 │   │       │   ├── sports-get-schedule.tool.ts
 │   │       │   ├── sports-get-scores.tool.ts
@@ -159,8 +160,10 @@ sports-mcp-server/
 │   │       └── formatting.ts
 │   ├── services/
 │   │   ├── espn/
+│   │   │   ├── espn-game-detail.ts
 │   │   │   └── espn-service.ts
 │   │   ├── mlb/
+│   │   │   ├── mlb-game-detail.ts
 │   │   │   └── mlb-service.ts
 │   │   ├── thesportsdb/
 │   │   │   └── thesportsdb-service.ts
@@ -172,6 +175,18 @@ sports-mcp-server/
 │   └── index.ts
 ├── tests/
 │   ├── fixtures/
+│   │   ├── game-detail/
+│   │   │   ├── epl-summary.json
+│   │   │   ├── mlb-board-feed.json
+│   │   │   ├── mlb-future-feed.json
+│   │   │   ├── mlb-missing.json
+│   │   │   ├── nba-summary.json
+│   │   │   ├── nfl-board-summary.json
+│   │   │   ├── nfl-board.json
+│   │   │   ├── nfl-future-summary.json
+│   │   │   ├── nfl-missing.json
+│   │   │   ├── nhl-summary.json
+│   │   │   └── wrong-league.json
 │   │   ├── college-default-inventories.json
 │   │   ├── college-inventory-ids.json
 │   │   ├── espn-calendar.json
@@ -184,6 +199,7 @@ sports-mcp-server/
 │   ├── resources/
 │   ├── services/
 │   │   ├── espn-service.test.ts
+│   │   ├── game-detail.test.ts
 │   │   ├── mlb-enrichment.test.ts
 │   │   ├── mlb-service.test.ts
 │   │   ├── provider-requests.test.ts
@@ -193,6 +209,7 @@ sports-mcp-server/
 │   │   ├── formatting.test.ts
 │   │   ├── sports-find-player.tool.test.ts
 │   │   ├── sports-find-team.tool.test.ts
+│   │   ├── sports-get-game.tool.test.ts
 │   │   ├── sports-get-player.tool.test.ts
 │   │   ├── sports-get-schedule.tool.test.ts
 │   │   ├── sports-get-scores.tool.test.ts

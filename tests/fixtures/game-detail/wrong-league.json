@@ -1,0 +1,6 @@
+{
+  "url": "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/summary?event=401872981",
+  "status": 404,
+  "capturedAt": "2026-10-13T13:41:07.964Z",
+  "body": "{\"code\":404,\"message\":\"Error invoking GET: http://sports.core.api.espn.pvt/v2/sports/basketball/leagues/nba/events/401872981/competitions/401872981/status, status=404, duration=2 ms, message=null, cache=CACHE_MISS\"}"
+}

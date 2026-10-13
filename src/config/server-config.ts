@@ -10,7 +10,9 @@ const ServerConfigSchema = z.object({
   theSportsDbApiKey: z
     .string()
     .default('3')
-    .describe('TheSportsDB API key (default: free public key "3")'),
+    .describe(
+      'TheSportsDB API key (default: free public key "3", one-record player/team searches)',
+    ),
 });
 
 export type ServerConfig = z.infer<typeof ServerConfigSchema>;

@@ -60,6 +60,12 @@ describe('sportsGetPlayer', () => {
     // Verify prefix was stripped when calling the service
     expect(mockTsdbSvc.lookupPlayer).toHaveBeenCalledWith('34185573', ctx);
   });
+  it('delivers supplied ESPN player cross-reference on both surfaces', async () => {
+    mockTsdbSvc.lookupPlayer.mockResolvedValue(makePlayer({ espnId: '39832' }));
+    const result = await runToolContract(sportsGetPlayer, { player_id: '34185573' });
+    expect(result.structuredContent).toMatchObject({ player: { espnId: '39832' } });
+    expect(JSON.stringify(result.content)).toContain('39832');
+  });
 
   it('accepts raw numeric ID without prefix', async () => {
     const player = makePlayer();

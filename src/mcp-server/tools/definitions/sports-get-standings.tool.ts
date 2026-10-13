@@ -51,6 +51,12 @@ export const sportsGetStandings = tool('sports_get_standings', {
         z
           .object({
             rank: z.number().describe('Team rank within their group (1-based).'),
+            group: z
+              .string()
+              .nullable()
+              .describe(
+                'Upstream ranking group, conference, table, or MLB division name; null when unavailable.',
+              ),
             team: z
               .object({
                 id: z.string().describe('Source-prefixed team ID.'),
@@ -61,6 +67,10 @@ export const sportsGetStandings = tool('sports_get_standings', {
             wins: z.number().describe('Number of wins.'),
             losses: z.number().describe('Number of losses.'),
             ties: z.number().nullable().describe('Number of ties (null if not applicable).'),
+            overtimeLosses: z
+              .number()
+              .nullable()
+              .describe('NHL overtime losses; null when unavailable or inapplicable.'),
             points: z.number().nullable().describe('Points total (used in NHL and soccer).'),
             winningPercentage: z
               .string()
@@ -94,7 +104,7 @@ export const sportsGetStandings = tool('sports_get_standings', {
     {
       reason: 'season_not_found',
       code: JsonRpcErrorCode.NotFound,
-      when: 'An explicit season year was requested but returned no standings data.',
+      when: 'An explicit season year returned no standings or could not be verified against the provider season metadata.',
       recovery: 'Try a recent year or omit the season parameter to get current standings.',
     },
   ],
@@ -158,15 +168,17 @@ export const sportsGetStandings = tool('sports_get_standings', {
 
     for (const s of result.standings) {
       const tiesStr = s.ties != null ? ` ${s.ties}T` : '';
+      const overtimeStr = s.overtimeLosses != null ? ` ${s.overtimeLosses}OTL` : '';
       const ptsStr = s.points != null ? ` ${s.points}pts` : '';
-      const record = `${s.wins}W ${s.losses}L${tiesStr}${ptsStr}`;
+      const record = `${s.wins}W ${s.losses}L${tiesStr}${overtimeStr}${ptsStr}`;
+      const group = s.group ? ` | group:${s.group}` : '';
       const pct = s.winningPercentage ? ` pct:${s.winningPercentage}` : '';
       const streak = s.streak ? ` | streak:${s.streak}` : '';
       const gb = s.gamesBehind ? ` | GB:${s.gamesBehind}` : '';
       const divRank = s.divisionRank ? ` | divRank:${s.divisionRank}` : '';
 
       lines.push(
-        inline`${s.rank}. **${s.team.abbreviation}** (${s.team.name}) [${s.team.id}] — ${record}${pct}${streak}${gb}${divRank}`,
+        inline`${s.rank}. **${s.team.abbreviation}** (${s.team.name}) [${s.team.id}] — ${record}${group}${pct}${streak}${gb}${divRank}`,
       );
     }
 

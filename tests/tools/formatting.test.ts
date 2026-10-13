@@ -59,6 +59,8 @@ const game = {
 };
 const standing = {
   rank: 2,
+  group: 'American League West',
+  overtimeLosses: null,
   team: { id: 'mlb:136', name: 'Seattle Mariners', abbreviation: 'SEA' },
   wins: 90,
   losses: 72,
