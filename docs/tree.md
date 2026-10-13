@@ -1,6 +1,6 @@
 # sports-mcp-server - Directory Structure
 
-Generated on: 2026-10-13 14:20:27
+Generated on: 2026-10-13 14:38:26
 
 ```text
 sports-mcp-server/
@@ -27,6 +27,7 @@ sports-mcp-server/
 │   ├── 0.1.x/
 │   ├── 0.2.x/
 │   ├── 0.3.x/
+│   ├── 0.4.x/
 │   └── template.md
 ├── docs/
 │   ├── design.md
