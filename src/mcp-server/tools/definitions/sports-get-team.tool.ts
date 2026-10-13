@@ -9,6 +9,7 @@ import { withRetry } from '@cyanheads/mcp-ts-core/utils';
 import { getEspnService } from '@/services/espn/espn-service.js';
 import { fetchProviderText } from '@/services/fetch-provider-text.js';
 import { getMlbService } from '@/services/mlb/mlb-service.js';
+import { ambiguityDetails, teamCandidates } from '@/services/team-resolver.js';
 import { LEAGUE_ROUTES } from '@/services/types.js';
 import { inline } from '../formatting.js';
 
@@ -30,7 +31,7 @@ const LEAGUE_ENUM = z.enum([
 
 export const sportsGetTeam = tool('sports_get_team', {
   description:
-    'Team details combining metadata, venue, active roster, the last 5 results, and the next 3 upcoming fixtures.',
+    'Team metadata, venue, active roster, latest five completed results, and next three scheduled fixtures. ESPN games cover its current provider season across phases and soccer results/fixtures; MLB uses a 30-day history and lookahead. NCAAB is men’s Division I; college football lookup uses ESPN’s team inventory.',
 
   annotations: { readOnlyHint: true, openWorldHint: true },
 
@@ -42,7 +43,9 @@ export const sportsGetTeam = tool('sports_get_team', {
       .string()
       .regex(/\S/, 'Team name must contain at least one non-whitespace character.')
       .max(200, 'Team name must be 200 characters or fewer.')
-      .describe('Team name, abbreviation, or city. Fuzzy matched against ESPN/MLB team list.'),
+      .describe(
+        'Exact full name or abbreviation takes precedence; a partial name or location must identify one team.',
+      ),
   }),
 
   output: z.object({
@@ -154,6 +157,12 @@ export const sportsGetTeam = tool('sports_get_team', {
 
   errors: [
     {
+      reason: 'ambiguous_team',
+      code: JsonRpcErrorCode.ValidationError,
+      when: 'The team selector matches more than one canonical team.',
+      recovery: 'Choose an exact full name or abbreviation from the supplied candidates.',
+    },
+    {
       reason: 'team_not_found',
       code: JsonRpcErrorCode.NotFound,
       when: 'No team matched the provided team_name in the specified league.',
@@ -165,17 +174,18 @@ export const sportsGetTeam = tool('sports_get_team', {
     // biome-ignore lint/style/noNonNullAssertion: Zod enum guarantees input.league is always a key in LEAGUE_ROUTES
     const route = LEAGUE_ROUTES[input.league]!;
     ctx.log.info('Fetching team detail', { league: input.league, team: input.team_name });
-    const q = input.team_name.toLowerCase();
     const now = new Date().toISOString().slice(0, 10);
 
     if (route.mlbLeagueId) {
       const teams = await getMlbService().getTeams(null, ctx);
-      const team = teams.find(
-        (t) =>
-          t.name.toLowerCase().includes(q) ||
-          t.displayName.toLowerCase().includes(q) ||
-          t.abbreviation.toLowerCase() === q,
-      );
+      const candidates = teamCandidates(teams, input.team_name);
+      if (candidates.length > 1)
+        throw ctx.fail(
+          'ambiguous_team',
+          `Team selector "${input.team_name}" is ambiguous.`,
+          ambiguityDetails(candidates),
+        );
+      const team = candidates[0];
       if (!team?.mlbId)
         throw ctx.fail('team_not_found', `No MLB team matching "${input.team_name}".`);
 
@@ -259,21 +269,28 @@ export const sportsGetTeam = tool('sports_get_team', {
         if (!teamGames.find((g) => g.id === tg.id)) teamGames.push(tg);
       }
 
-      const recentResults = teamGames.filter((g) => g.status === 'final').slice(-5);
-      const upcomingFixtures = teamGames.filter((g) => g.status === 'scheduled').slice(0, 3);
+      const recentResults = teamGames
+        .filter((g) => g.status === 'final')
+        .sort((a, b) => b.startTimeUtc.localeCompare(a.startTimeUtc))
+        .slice(0, 5);
+      const upcomingFixtures = teamGames
+        .filter((g) => g.status === 'scheduled' && Date.parse(g.startTimeUtc) >= Date.now())
+        .sort((a, b) => a.startTimeUtc.localeCompare(b.startTimeUtc))
+        .slice(0, 3);
 
       return { team, roster, recentResults, upcomingFixtures };
     }
 
     // ESPN path
     const espnTeams = await getEspnService().getTeams(route.espnSport, route.espnLeague, ctx);
-    const team = espnTeams.find(
-      (t) =>
-        t.name.toLowerCase().includes(q) ||
-        t.displayName.toLowerCase().includes(q) ||
-        t.abbreviation.toLowerCase() === q ||
-        t.location.toLowerCase().includes(q),
-    );
+    const candidates = teamCandidates(espnTeams, input.team_name);
+    if (candidates.length > 1)
+      throw ctx.fail(
+        'ambiguous_team',
+        `Team selector "${input.team_name}" is ambiguous.`,
+        ambiguityDetails(candidates),
+      );
+    const team = candidates[0];
     if (!team)
       throw ctx.fail('team_not_found', `No team matching "${input.team_name}" in ${input.league}.`);
 
@@ -289,10 +306,12 @@ export const sportsGetTeam = tool('sports_get_team', {
     const roster = rosterRaw.map((p) => ({ name: p.name, position: p.position, jersey: p.jersey }));
 
     const recentResults = allGames
-      .filter((g) => g.status === 'final' && g.startTimeUtc.slice(0, 10) <= now)
-      .slice(-5);
+      .filter((g) => g.status === 'final')
+      .sort((a, b) => b.startTimeUtc.localeCompare(a.startTimeUtc))
+      .slice(0, 5);
     const upcomingFixtures = allGames
-      .filter((g) => g.status === 'scheduled' && g.startTimeUtc.slice(0, 10) >= now)
+      .filter((g) => g.status === 'scheduled' && Date.parse(g.startTimeUtc) >= Date.now())
+      .sort((a, b) => a.startTimeUtc.localeCompare(b.startTimeUtc))
       .slice(0, 3);
 
     return { team: teamDetail, roster, recentResults, upcomingFixtures };

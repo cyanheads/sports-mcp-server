@@ -65,6 +65,19 @@ export class MlbService {
     return this.fetchSchedule(url, ctx);
   }
 
+  /** Fetch a team's inclusive provider-calendar range using the shared transport and normalization. */
+  getTeamScheduleRange(
+    teamId: number,
+    dateFrom: string,
+    dateTo: string,
+    ctx: Context,
+  ): Promise<NormalizedGame[]> {
+    return this.fetchSchedule(
+      `${MLB_BASE}/schedule?sportId=1&hydrate=team,linescore,decisions&teamId=${teamId}&startDate=${dateFrom}&endDate=${dateTo}`,
+      ctx,
+    );
+  }
+
   private async fetchSchedule(url: string, ctx: Context): Promise<NormalizedGame[]> {
     const data = await this.fetchJson<{ dates?: unknown[] }>(url, ctx);
     const dates = data?.dates ?? [];
@@ -98,6 +111,7 @@ export class MlbService {
         const awayAbbr = String(awayTeamRaw?.abbreviation ?? awayTeamRaw?.teamCode ?? '');
 
         games.push({
+          ...(typeof dateObj.date === 'string' ? { providerDate: dateObj.date } : {}),
           id: `mlb:${String(game.gamePk ?? '')}`,
           shortName: `${awayAbbr} @ ${homeAbbr}`,
           homeTeam: {

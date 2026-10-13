@@ -326,7 +326,7 @@ describe('ESPN scoreboard recovery', () => {
       const args =
         definition.name === 'sports_get_scores'
           ? { league: 'nfl', date: '2026-13-99' }
-          : { league: 'nfl', date_from: '2026-13-99', date_to: '2026-13-99' };
+          : { league: 'nfl', date_from: '2026-10-08', date_to: '2026-10-08' };
       const outcome = runToolContract(definition, args);
       await vi.runAllTimersAsync();
       const result = await outcome;

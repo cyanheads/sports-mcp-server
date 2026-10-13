@@ -8,6 +8,7 @@ import type { AppConfig } from '@cyanheads/mcp-ts-core/config';
 import { JsonRpcErrorCode, McpError, serviceUnavailable } from '@cyanheads/mcp-ts-core/errors';
 import type { StorageService } from '@cyanheads/mcp-ts-core/storage';
 import { withRetry } from '@cyanheads/mcp-ts-core/utils';
+import { addCalendarDays } from '../date-window.js';
 import { fetchProviderText } from '../fetch-provider-text.js';
 import type { NormalizedGame, NormalizedStanding, NormalizedTeam } from '../types.js';
 
@@ -62,18 +63,23 @@ export class EspnService {
     return this.fetchScoreboard(sport, league, date ? date.replace(/-/g, '') : null, ctx);
   }
 
-  /** Fetch an inclusive league-wide scoreboard range in YYYY-MM-DD format. */
-  getScoreboardRange(
+  /** Fetch a bounded inclusive range using authoritative single-day scoreboard membership. */
+  async getScoreboardRange(
     sport: string,
     league: string,
     dateFrom: string,
     dateTo: string,
     ctx: Context,
   ): Promise<NormalizedGame[]> {
-    const dates = `${dateFrom.replace(/-/g, '')}-${dateTo.replace(/-/g, '')}`;
     ctx.log.debug('ESPN scoreboard range fetch', { sport, league, dateFrom, dateTo });
-
-    return this.fetchScoreboard(sport, league, dates, ctx);
+    const games: NormalizedGame[] = [];
+    for (let day = dateFrom; day <= dateTo; day = addCalendarDays(day, 1)) {
+      ctx.signal.throwIfAborted();
+      const slate = await this.getScoreboard(sport, league, day, ctx);
+      games.push(...slate.map((game) => ({ ...game, providerDate: day })));
+      if (day === dateTo) break;
+    }
+    return games;
   }
 
   private async fetchScoreboard(
@@ -82,7 +88,11 @@ export class EspnService {
     dates: string | null,
     ctx: Context,
   ): Promise<NormalizedGame[]> {
-    const dateParam = dates ? `?dates=${dates}` : '';
+    const params = new URLSearchParams();
+    if (dates) params.set('dates', dates);
+    if (league === 'mens-college-basketball') params.set('groups', '50');
+    if (league === 'college-football') params.set('groups', '80');
+    const dateParam = params.size ? `?${params}` : '';
     const url = `${ESPN_BASE}/apis/site/v2/sports/${sport}/${league}/scoreboard${dateParam}`;
 
     let data: { events?: unknown[] };
@@ -187,7 +197,7 @@ export class EspnService {
     return games;
   }
 
-  /** Fetch the full season schedule for a team and return normalized games. */
+  /** Merge the provider season's soccer results/fixtures or US sport phases, then order games. */
   async getTeamSchedule(
     sport: string,
     league: string,
@@ -199,13 +209,49 @@ export class EspnService {
     const url = `${ESPN_BASE}/apis/site/v2/sports/${sport}/${league}/teams/${teamId}/schedule${seasonParam}`;
     ctx.log.debug('ESPN team schedule fetch', { sport, league, teamId, season });
 
-    const data = await this.fetchJson<{ events?: unknown[] }>(url, ctx);
-    return this.normalizeEvents(data?.events ?? [], sport, league);
+    const data = await this.fetchJson<{
+      events?: unknown[];
+      season?: { year?: number; type?: number };
+    }>(url, ctx);
+    const games = this.normalizeEvents(data?.events ?? [], sport, league);
+    if (sport === 'soccer') {
+      const params = new URLSearchParams({ fixture: 'true' });
+      if (season) params.set('season', season);
+      const fixtures = await this.fetchJson<{ events?: unknown[] }>(
+        `${url.split('?')[0]}?${params}`,
+        ctx,
+      );
+      games.push(...this.normalizeEvents(fixtures?.events ?? [], sport, league));
+    } else if (data?.season?.year != null || season) {
+      const year = season ?? String(data.season?.year);
+      const includedPhases = new Set(
+        (data.events ?? []).map((event) => {
+          const record = event as Record<string, unknown>;
+          return (record.seasonType as { type?: number } | undefined)?.type;
+        }),
+      );
+      /** Top-level phase metadata can remain preseason on regular-season records. */
+      for (const phase of [1, 2, 3]) {
+        if (includedPhases.has(phase)) continue;
+        ctx.signal.throwIfAborted();
+        const params = new URLSearchParams({ season: year, seasontype: String(phase) });
+        const phaseData = await this.fetchJson<{ events?: unknown[] }>(
+          `${url.split('?')[0]}?${params}`,
+          ctx,
+        );
+        games.push(...this.normalizeEvents(phaseData?.events ?? [], sport, league));
+      }
+    }
+    return [...new Map(games.map((game) => [game.id, game])).values()].sort(
+      (a, b) => a.startTimeUtc.localeCompare(b.startTimeUtc) || a.id.localeCompare(b.id),
+    );
   }
 
   /** Fetch the list of all teams in a sport/league. */
   async getTeams(sport: string, league: string, ctx: Context): Promise<NormalizedTeam[]> {
-    const url = `${ESPN_BASE}/apis/site/v2/sports/${sport}/${league}/teams`;
+    const inventory =
+      league === 'college-football' || league === 'mens-college-basketball' ? '?limit=1000' : '';
+    const url = `${ESPN_BASE}/apis/site/v2/sports/${sport}/${league}/teams${inventory}`;
     ctx.log.debug('ESPN teams fetch', { sport, league });
 
     const data = await this.fetchJson<{ sports?: unknown[] }>(url, ctx);

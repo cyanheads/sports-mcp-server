@@ -159,7 +159,11 @@ describe('sportsGetTeam', () => {
     mockEspnSvc.getTeamRoster.mockResolvedValue([]);
     mockEspnSvc.getTeamSchedule.mockResolvedValue([
       ...Array.from({ length: 8 }, (_, i) =>
-        makeGame({ id: `espn:past-${i}`, status: 'final', startTimeUtc: '2020-01-01T12:00:00Z' }),
+        makeGame({
+          id: `espn:past-${i}`,
+          status: 'final',
+          startTimeUtc: `2020-01-0${i + 1}T12:00:00Z`,
+        }),
       ),
       ...Array.from({ length: 6 }, (_, i) =>
         makeGame({ id: `espn:future-${i}`, startTimeUtc: '2099-01-01T12:00:00Z' }),
@@ -170,11 +174,11 @@ describe('sportsGetTeam', () => {
       createMockContext({ errors: sportsGetTeam.errors }),
     );
     expect(result.recentResults.map((game) => game.id)).toEqual([
-      'espn:past-3',
-      'espn:past-4',
-      'espn:past-5',
-      'espn:past-6',
       'espn:past-7',
+      'espn:past-6',
+      'espn:past-5',
+      'espn:past-4',
+      'espn:past-3',
     ]);
     expect(result.upcomingFixtures.map((game) => game.id)).toEqual([
       'espn:future-0',

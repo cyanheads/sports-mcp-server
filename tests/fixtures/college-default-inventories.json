@@ -1,0 +1,926 @@
+{
+  "ncaaf-teams-default": {
+    "sports": [
+      {
+        "leagues": [
+          {
+            "teams": [
+              {
+                "team": {
+                  "id": "7",
+                  "name": "Mammoths",
+                  "displayName": "Amherst Mammoths",
+                  "abbreviation": "AMH",
+                  "location": "Amherst"
+                }
+              },
+              {
+                "team": {
+                  "id": "9",
+                  "name": "Sun Devils",
+                  "displayName": "Arizona State Sun Devils",
+                  "abbreviation": "ASU",
+                  "location": "Arizona State"
+                }
+              },
+              {
+                "team": {
+                  "id": "12",
+                  "name": "Wildcats",
+                  "displayName": "Arizona Wildcats",
+                  "abbreviation": "ARIZ",
+                  "location": "Arizona"
+                }
+              },
+              {
+                "team": {
+                  "id": "8",
+                  "name": "Razorbacks",
+                  "displayName": "Arkansas Razorbacks",
+                  "abbreviation": "ARK",
+                  "location": "Arkansas"
+                }
+              },
+              {
+                "team": {
+                  "id": "2",
+                  "name": "Tigers",
+                  "displayName": "Auburn Tigers",
+                  "abbreviation": "AUB",
+                  "location": "Auburn"
+                }
+              },
+              {
+                "team": {
+                  "id": "68",
+                  "name": "Broncos",
+                  "displayName": "Boise State Broncos",
+                  "abbreviation": "BOIS",
+                  "location": "Boise State"
+                }
+              },
+              {
+                "team": {
+                  "id": "18",
+                  "name": "Bears",
+                  "displayName": "Bridgewater State Bears",
+                  "abbreviation": "BRIS",
+                  "location": "Bridgewater State"
+                }
+              },
+              {
+                "team": {
+                  "id": "63",
+                  "name": "Beavers",
+                  "displayName": "Buena Vista Beavers",
+                  "abbreviation": "BVU",
+                  "location": "Buena Vista"
+                }
+              },
+              {
+                "team": {
+                  "id": "13",
+                  "name": "Mustangs",
+                  "displayName": "Cal Poly Mustangs",
+                  "abbreviation": "CP",
+                  "location": "Cal Poly"
+                }
+              },
+              {
+                "team": {
+                  "id": "25",
+                  "name": "Golden Bears",
+                  "displayName": "California Golden Bears",
+                  "abbreviation": "CAL",
+                  "location": "California"
+                }
+              },
+              {
+                "team": {
+                  "id": "32",
+                  "name": "Pioneers",
+                  "displayName": "Carroll (WI) Pioneers",
+                  "abbreviation": "CRU",
+                  "location": "Carroll (WI)"
+                }
+              },
+              {
+                "team": {
+                  "id": "17",
+                  "name": "Stags",
+                  "displayName": "Claremont Mudd Scripps Stags",
+                  "abbreviation": "CMS",
+                  "location": "Claremont Mudd Scripps"
+                }
+              },
+              {
+                "team": {
+                  "id": "33",
+                  "name": "White Mules",
+                  "displayName": "Colby White Mules",
+                  "abbreviation": "CLBY",
+                  "location": "Colby"
+                }
+              },
+              {
+                "team": {
+                  "id": "38",
+                  "name": "Buffaloes",
+                  "displayName": "Colorado Buffaloes",
+                  "abbreviation": "COLO",
+                  "location": "Colorado"
+                }
+              },
+              {
+                "team": {
+                  "id": "11",
+                  "name": "Mavericks",
+                  "displayName": "Colorado Mesa Mavericks",
+                  "abbreviation": "COMU",
+                  "location": "Colorado Mesa"
+                }
+              },
+              {
+                "team": {
+                  "id": "36",
+                  "name": "Rams",
+                  "displayName": "Colorado State Rams",
+                  "abbreviation": "CSU",
+                  "location": "Colorado State"
+                }
+              },
+              {
+                "team": {
+                  "id": "40",
+                  "name": "Colonels",
+                  "displayName": "Curry Colonels",
+                  "abbreviation": "CC",
+                  "location": "Curry"
+                }
+              },
+              {
+                "team": {
+                  "id": "48",
+                  "name": "Blue Hens",
+                  "displayName": "Delaware Blue Hens",
+                  "abbreviation": "DEL",
+                  "location": "Delaware"
+                }
+              },
+              {
+                "team": {
+                  "id": "49",
+                  "name": "Spartans",
+                  "displayName": "Dubuque Spartans",
+                  "abbreviation": "DBQ",
+                  "location": "Dubuque"
+                }
+              },
+              {
+                "team": {
+                  "id": "72",
+                  "name": "Bluejays",
+                  "displayName": "Elmhurst Bluejays",
+                  "abbreviation": "ELMH",
+                  "location": "Elmhurst"
+                }
+              },
+              {
+                "team": {
+                  "id": "50",
+                  "name": "Rattlers",
+                  "displayName": "Florida A&M Rattlers",
+                  "abbreviation": "FAMU",
+                  "location": "Florida A&M"
+                }
+              },
+              {
+                "team": {
+                  "id": "57",
+                  "name": "Gators",
+                  "displayName": "Florida Gators",
+                  "abbreviation": "FLA",
+                  "location": "Florida"
+                }
+              },
+              {
+                "team": {
+                  "id": "52",
+                  "name": "Seminoles",
+                  "displayName": "Florida State Seminoles",
+                  "abbreviation": "FSU",
+                  "location": "Florida State"
+                }
+              },
+              {
+                "team": {
+                  "id": "46",
+                  "name": "Hoyas",
+                  "displayName": "Georgetown Hoyas",
+                  "abbreviation": "GTWN",
+                  "location": "Georgetown"
+                }
+              },
+              {
+                "team": {
+                  "id": "61",
+                  "name": "Bulldogs",
+                  "displayName": "Georgia Bulldogs",
+                  "abbreviation": "UGA",
+                  "location": "Georgia"
+                }
+              },
+              {
+                "team": {
+                  "id": "59",
+                  "name": "Yellow Jackets",
+                  "displayName": "Georgia Tech Yellow Jackets",
+                  "abbreviation": "GT",
+                  "location": "Georgia Tech"
+                }
+              },
+              {
+                "team": {
+                  "id": "65",
+                  "name": "Pioneers",
+                  "displayName": "Grinnell Pioneers",
+                  "abbreviation": "GRNL",
+                  "location": "Grinnell"
+                }
+              },
+              {
+                "team": {
+                  "id": "62",
+                  "name": "Rainbow Warriors",
+                  "displayName": "Hawai'i Rainbow Warriors",
+                  "abbreviation": "HAW",
+                  "location": "Hawai'i"
+                }
+              },
+              {
+                "team": {
+                  "id": "47",
+                  "name": "Bison",
+                  "displayName": "Howard Bison",
+                  "abbreviation": "HOW",
+                  "location": "Howard"
+                }
+              },
+              {
+                "team": {
+                  "id": "70",
+                  "name": "Vandals",
+                  "displayName": "Idaho Vandals",
+                  "abbreviation": "IDHO",
+                  "location": "Idaho"
+                }
+              },
+              {
+                "team": {
+                  "id": "66",
+                  "name": "Cyclones",
+                  "displayName": "Iowa State Cyclones",
+                  "abbreviation": "ISU",
+                  "location": "Iowa State"
+                }
+              },
+              {
+                "team": {
+                  "id": "55",
+                  "name": "Gamecocks",
+                  "displayName": "Jacksonville State Gamecocks",
+                  "abbreviation": "JXST",
+                  "location": "Jacksonville State"
+                }
+              },
+              {
+                "team": {
+                  "id": "67",
+                  "name": "Norse",
+                  "displayName": "Luther Norse",
+                  "abbreviation": "LUTH",
+                  "location": "Luther"
+                }
+              },
+              {
+                "team": {
+                  "id": "74",
+                  "name": "Big Blue",
+                  "displayName": "Millikin Big Blue",
+                  "abbreviation": "MILK",
+                  "location": "Millikin"
+                }
+              },
+              {
+                "team": {
+                  "id": "60",
+                  "name": "Maroon Tigers",
+                  "displayName": "Morehouse Maroon Tigers",
+                  "abbreviation": "MRHO",
+                  "location": "Morehouse"
+                }
+              },
+              {
+                "team": {
+                  "id": "75",
+                  "name": "Vikings",
+                  "displayName": "North Park Vikings",
+                  "abbreviation": "NPU",
+                  "location": "North Park"
+                }
+              },
+              {
+                "team": {
+                  "id": "77",
+                  "name": "Wildcats",
+                  "displayName": "Northwestern Wildcats",
+                  "abbreviation": "NU",
+                  "location": "Northwestern"
+                }
+              },
+              {
+                "team": {
+                  "id": "29",
+                  "name": "Bulldogs",
+                  "displayName": "Redlands Bulldogs",
+                  "abbreviation": "REDL",
+                  "location": "Redlands"
+                }
+              },
+              {
+                "team": {
+                  "id": "16",
+                  "name": "Hornets",
+                  "displayName": "Sacramento State Hornets",
+                  "abbreviation": "SAC",
+                  "location": "Sacramento State"
+                }
+              },
+              {
+                "team": {
+                  "id": "21",
+                  "name": "Aztecs",
+                  "displayName": "San Diego State Aztecs",
+                  "abbreviation": "SDSU",
+                  "location": "San Diego State"
+                }
+              },
+              {
+                "team": {
+                  "id": "23",
+                  "name": "Spartans",
+                  "displayName": "San José State Spartans",
+                  "abbreviation": "SJSU",
+                  "location": "San José State"
+                }
+              },
+              {
+                "team": {
+                  "id": "6",
+                  "name": "Jaguars",
+                  "displayName": "South Alabama Jaguars",
+                  "abbreviation": "USA",
+                  "location": "South Alabama"
+                }
+              },
+              {
+                "team": {
+                  "id": "58",
+                  "name": "Bulls",
+                  "displayName": "South Florida Bulls",
+                  "abbreviation": "USF",
+                  "location": "South Florida"
+                }
+              },
+              {
+                "team": {
+                  "id": "24",
+                  "name": "Cardinal",
+                  "displayName": "Stanford Cardinal",
+                  "abbreviation": "STAN",
+                  "location": "Stanford"
+                }
+              },
+              {
+                "team": {
+                  "id": "56",
+                  "name": "Hatters",
+                  "displayName": "Stetson Hatters",
+                  "abbreviation": "STET",
+                  "location": "Stetson"
+                }
+              },
+              {
+                "team": {
+                  "id": "5",
+                  "name": "Blazers",
+                  "displayName": "UAB Blazers",
+                  "abbreviation": "UAB",
+                  "location": "UAB"
+                }
+              },
+              {
+                "team": {
+                  "id": "26",
+                  "name": "Bruins",
+                  "displayName": "UCLA Bruins",
+                  "abbreviation": "UCLA",
+                  "location": "UCLA"
+                }
+              },
+              {
+                "team": {
+                  "id": "41",
+                  "name": "Huskies",
+                  "displayName": "UConn Huskies",
+                  "abbreviation": "CONN",
+                  "location": "UConn"
+                }
+              },
+              {
+                "team": {
+                  "id": "30",
+                  "name": "Trojans",
+                  "displayName": "USC Trojans",
+                  "abbreviation": "USC",
+                  "location": "USC"
+                }
+              },
+              {
+                "team": {
+                  "id": "43",
+                  "name": "Bulldogs",
+                  "displayName": "Yale Bulldogs",
+                  "abbreviation": "YALE",
+                  "location": "Yale"
+                }
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "ncaab-teams-default": {
+    "sports": [
+      {
+        "leagues": [
+          {
+            "teams": [
+              {
+                "team": {
+                  "id": "44",
+                  "name": "Eagles",
+                  "displayName": "American University Eagles",
+                  "abbreviation": "AMER",
+                  "location": "American University"
+                }
+              },
+              {
+                "team": {
+                  "id": "9",
+                  "name": "Sun Devils",
+                  "displayName": "Arizona State Sun Devils",
+                  "abbreviation": "ASU",
+                  "location": "Arizona State"
+                }
+              },
+              {
+                "team": {
+                  "id": "12",
+                  "name": "Wildcats",
+                  "displayName": "Arizona Wildcats",
+                  "abbreviation": "ARIZ",
+                  "location": "Arizona"
+                }
+              },
+              {
+                "team": {
+                  "id": "8",
+                  "name": "Razorbacks",
+                  "displayName": "Arkansas Razorbacks",
+                  "abbreviation": "ARK",
+                  "location": "Arkansas"
+                }
+              },
+              {
+                "team": {
+                  "id": "2",
+                  "name": "Tigers",
+                  "displayName": "Auburn Tigers",
+                  "abbreviation": "AUB",
+                  "location": "Auburn"
+                }
+              },
+              {
+                "team": {
+                  "id": "91",
+                  "name": "Knights",
+                  "displayName": "Bellarmine Knights",
+                  "abbreviation": "BELL",
+                  "location": "Bellarmine"
+                }
+              },
+              {
+                "team": {
+                  "id": "68",
+                  "name": "Broncos",
+                  "displayName": "Boise State Broncos",
+                  "abbreviation": "BOIS",
+                  "location": "Boise State"
+                }
+              },
+              {
+                "team": {
+                  "id": "71",
+                  "name": "Braves",
+                  "displayName": "Bradley Braves",
+                  "abbreviation": "BRAD",
+                  "location": "Bradley"
+                }
+              },
+              {
+                "team": {
+                  "id": "13",
+                  "name": "Mustangs",
+                  "displayName": "Cal Poly Mustangs",
+                  "abbreviation": "CP",
+                  "location": "Cal Poly"
+                }
+              },
+              {
+                "team": {
+                  "id": "25",
+                  "name": "Golden Bears",
+                  "displayName": "California Golden Bears",
+                  "abbreviation": "CAL",
+                  "location": "California"
+                }
+              },
+              {
+                "team": {
+                  "id": "38",
+                  "name": "Buffaloes",
+                  "displayName": "Colorado Buffaloes",
+                  "abbreviation": "COLO",
+                  "location": "Colorado"
+                }
+              },
+              {
+                "team": {
+                  "id": "36",
+                  "name": "Rams",
+                  "displayName": "Colorado State Rams",
+                  "abbreviation": "CSU",
+                  "location": "Colorado State"
+                }
+              },
+              {
+                "team": {
+                  "id": "48",
+                  "name": "Blue Hens",
+                  "displayName": "Delaware Blue Hens",
+                  "abbreviation": "DEL",
+                  "location": "Delaware"
+                }
+              },
+              {
+                "team": {
+                  "id": "50",
+                  "name": "Rattlers",
+                  "displayName": "Florida A&M Rattlers",
+                  "abbreviation": "FAMU",
+                  "location": "Florida A&M"
+                }
+              },
+              {
+                "team": {
+                  "id": "57",
+                  "name": "Gators",
+                  "displayName": "Florida Gators",
+                  "abbreviation": "FLA",
+                  "location": "Florida"
+                }
+              },
+              {
+                "team": {
+                  "id": "52",
+                  "name": "Seminoles",
+                  "displayName": "Florida State Seminoles",
+                  "abbreviation": "FSU",
+                  "location": "Florida State"
+                }
+              },
+              {
+                "team": {
+                  "id": "45",
+                  "name": "Revolutionaries",
+                  "displayName": "George Washington Revolutionaries",
+                  "abbreviation": "GW",
+                  "location": "George Washington"
+                }
+              },
+              {
+                "team": {
+                  "id": "46",
+                  "name": "Hoyas",
+                  "displayName": "Georgetown Hoyas",
+                  "abbreviation": "GTWN",
+                  "location": "Georgetown"
+                }
+              },
+              {
+                "team": {
+                  "id": "61",
+                  "name": "Bulldogs",
+                  "displayName": "Georgia Bulldogs",
+                  "abbreviation": "UGA",
+                  "location": "Georgia"
+                }
+              },
+              {
+                "team": {
+                  "id": "59",
+                  "name": "Yellow Jackets",
+                  "displayName": "Georgia Tech Yellow Jackets",
+                  "abbreviation": "GT",
+                  "location": "Georgia Tech"
+                }
+              },
+              {
+                "team": {
+                  "id": "62",
+                  "name": "Rainbow Warriors",
+                  "displayName": "Hawai'i Rainbow Warriors",
+                  "abbreviation": "HAW",
+                  "location": "Hawai'i"
+                }
+              },
+              {
+                "team": {
+                  "id": "47",
+                  "name": "Bison",
+                  "displayName": "Howard Bison",
+                  "abbreviation": "HOW",
+                  "location": "Howard"
+                }
+              },
+              {
+                "team": {
+                  "id": "85",
+                  "name": "Jaguars",
+                  "displayName": "IU Indianapolis Jaguars",
+                  "abbreviation": "IUIN",
+                  "location": "IU Indianapolis"
+                }
+              },
+              {
+                "team": {
+                  "id": "70",
+                  "name": "Vandals",
+                  "displayName": "Idaho Vandals",
+                  "abbreviation": "IDHO",
+                  "location": "Idaho"
+                }
+              },
+              {
+                "team": {
+                  "id": "84",
+                  "name": "Hoosiers",
+                  "displayName": "Indiana Hoosiers",
+                  "abbreviation": "IU",
+                  "location": "Indiana"
+                }
+              },
+              {
+                "team": {
+                  "id": "66",
+                  "name": "Cyclones",
+                  "displayName": "Iowa State Cyclones",
+                  "abbreviation": "ISU",
+                  "location": "Iowa State"
+                }
+              },
+              {
+                "team": {
+                  "id": "55",
+                  "name": "Gamecocks",
+                  "displayName": "Jacksonville State Gamecocks",
+                  "abbreviation": "JXST",
+                  "location": "Jacksonville State"
+                }
+              },
+              {
+                "team": {
+                  "id": "96",
+                  "name": "Wildcats",
+                  "displayName": "Kentucky Wildcats",
+                  "abbreviation": "UK",
+                  "location": "Kentucky"
+                }
+              },
+              {
+                "team": {
+                  "id": "97",
+                  "name": "Cardinals",
+                  "displayName": "Louisville Cardinals",
+                  "abbreviation": "LOU",
+                  "location": "Louisville"
+                }
+              },
+              {
+                "team": {
+                  "id": "93",
+                  "name": "Racers",
+                  "displayName": "Murray State Racers",
+                  "abbreviation": "MUR",
+                  "location": "Murray State"
+                }
+              },
+              {
+                "team": {
+                  "id": "94",
+                  "name": "Norse",
+                  "displayName": "Northern Kentucky Norse",
+                  "abbreviation": "NKU",
+                  "location": "Northern Kentucky"
+                }
+              },
+              {
+                "team": {
+                  "id": "77",
+                  "name": "Wildcats",
+                  "displayName": "Northwestern Wildcats",
+                  "abbreviation": "NU",
+                  "location": "Northwestern"
+                }
+              },
+              {
+                "team": {
+                  "id": "87",
+                  "name": "Fighting Irish",
+                  "displayName": "Notre Dame Fighting Irish",
+                  "abbreviation": "ND",
+                  "location": "Notre Dame"
+                }
+              },
+              {
+                "team": {
+                  "id": "16",
+                  "name": "Hornets",
+                  "displayName": "Sacramento State Hornets",
+                  "abbreviation": "SAC",
+                  "location": "Sacramento State"
+                }
+              },
+              {
+                "team": {
+                  "id": "21",
+                  "name": "Aztecs",
+                  "displayName": "San Diego State Aztecs",
+                  "abbreviation": "SDSU",
+                  "location": "San Diego State"
+                }
+              },
+              {
+                "team": {
+                  "id": "23",
+                  "name": "Spartans",
+                  "displayName": "San José State Spartans",
+                  "abbreviation": "SJSU",
+                  "location": "San José State"
+                }
+              },
+              {
+                "team": {
+                  "id": "6",
+                  "name": "Jaguars",
+                  "displayName": "South Alabama Jaguars",
+                  "abbreviation": "USA",
+                  "location": "South Alabama"
+                }
+              },
+              {
+                "team": {
+                  "id": "58",
+                  "name": "Bulls",
+                  "displayName": "South Florida Bulls",
+                  "abbreviation": "USF",
+                  "location": "South Florida"
+                }
+              },
+              {
+                "team": {
+                  "id": "79",
+                  "name": "Salukis",
+                  "displayName": "Southern Illinois Salukis",
+                  "abbreviation": "SIU",
+                  "location": "Southern Illinois"
+                }
+              },
+              {
+                "team": {
+                  "id": "24",
+                  "name": "Cardinal",
+                  "displayName": "Stanford Cardinal",
+                  "abbreviation": "STAN",
+                  "location": "Stanford"
+                }
+              },
+              {
+                "team": {
+                  "id": "56",
+                  "name": "Hatters",
+                  "displayName": "Stetson Hatters",
+                  "abbreviation": "STET",
+                  "location": "Stetson"
+                }
+              },
+              {
+                "team": {
+                  "id": "5",
+                  "name": "Blazers",
+                  "displayName": "UAB Blazers",
+                  "abbreviation": "UAB",
+                  "location": "UAB"
+                }
+              },
+              {
+                "team": {
+                  "id": "27",
+                  "name": "Highlanders",
+                  "displayName": "UC Riverside Highlanders",
+                  "abbreviation": "UCR",
+                  "location": "UC Riverside"
+                }
+              },
+              {
+                "team": {
+                  "id": "28",
+                  "name": "Tritons",
+                  "displayName": "UC San Diego Tritons",
+                  "abbreviation": "UCSD",
+                  "location": "UC San Diego"
+                }
+              },
+              {
+                "team": {
+                  "id": "26",
+                  "name": "Bruins",
+                  "displayName": "UCLA Bruins",
+                  "abbreviation": "UCLA",
+                  "location": "UCLA"
+                }
+              },
+              {
+                "team": {
+                  "id": "41",
+                  "name": "Huskies",
+                  "displayName": "UConn Huskies",
+                  "abbreviation": "CONN",
+                  "location": "UConn"
+                }
+              },
+              {
+                "team": {
+                  "id": "82",
+                  "name": "Flames",
+                  "displayName": "UIC Flames",
+                  "abbreviation": "UIC",
+                  "location": "UIC"
+                }
+              },
+              {
+                "team": {
+                  "id": "30",
+                  "name": "Trojans",
+                  "displayName": "USC Trojans",
+                  "abbreviation": "USC",
+                  "location": "USC"
+                }
+              },
+              {
+                "team": {
+                  "id": "98",
+                  "name": "Hilltoppers",
+                  "displayName": "Western Kentucky Hilltoppers",
+                  "abbreviation": "WKU",
+                  "location": "Western Kentucky"
+                }
+              },
+              {
+                "team": {
+                  "id": "43",
+                  "name": "Bulldogs",
+                  "displayName": "Yale Bulldogs",
+                  "abbreviation": "YALE",
+                  "location": "Yale"
+                }
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

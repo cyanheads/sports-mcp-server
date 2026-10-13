@@ -119,27 +119,26 @@ describe('sportsGetSchedule', () => {
     });
   });
 
-  it('applies date_from / date_to filter', async () => {
-    const earlyGame = makeGame({ startTimeUtc: '2026-05-01T18:00:00Z' });
-    const lateGame = makeGame({ id: 'espn:501', startTimeUtc: '2026-09-15T18:00:00Z' });
-    mockEspnSvc.getScoreboardRange.mockResolvedValue([earlyGame, lateGame]);
+  it('trusts acquired provider-day membership rather than UTC date filtering', async () => {
+    const lateGame = makeGame({ id: 'espn:501', startTimeUtc: '2026-09-02T01:00:00Z' });
+    mockEspnSvc.getScoreboardRange.mockResolvedValue([lateGame]);
 
     const ctx = createMockContext({ errors: sportsGetSchedule.errors });
     const input = sportsGetSchedule.input.parse({
       league: 'nfl',
       date_from: '2026-09-01',
-      date_to: '2026-12-31',
+      date_to: '2026-09-01',
     });
     const result = await sportsGetSchedule.handler(input, ctx);
 
     expect(result.games).toHaveLength(1);
     expect(result.games[0].id).toBe('espn:501');
     expect(result.dateFrom).toBe('2026-09-01');
-    expect(result.dateTo).toBe('2026-12-31');
+    expect(result.dateTo).toBe('2026-09-01');
   });
 
   it('fetches and formats an ESPN league-wide paired date range', async () => {
-    const game = makeGame({ startTimeUtc: '2026-09-15T18:00:00Z' });
+    const game = makeGame({ startTimeUtc: '2026-09-02T18:00:00Z' });
     mockEspnSvc.getScoreboardRange.mockResolvedValue([game]);
 
     const ctx = createMockContext({ errors: sportsGetSchedule.errors });
@@ -154,7 +153,7 @@ describe('sportsGetSchedule', () => {
       'football',
       'nfl',
       '2026-09-01',
-      '2026-09-30',
+      '2026-09-07',
       ctx,
     );
     expect(mockEspnSvc.getScoreboard).not.toHaveBeenCalled();
@@ -180,16 +179,23 @@ describe('sportsGetSchedule', () => {
   });
 
   it.each([{ date_from: '2026-09-01' }, { date_to: '2026-09-30' }])(
-    'keeps the default ESPN fetch for a one-sided range $date_from $date_to',
+    'fetches the single provider day for a one-sided range $date_from $date_to',
     async (bounds) => {
-      mockEspnSvc.getScoreboard.mockResolvedValue([]);
+      mockEspnSvc.getScoreboardRange.mockResolvedValue([]);
 
       const ctx = createMockContext({ errors: sportsGetSchedule.errors });
       const input = sportsGetSchedule.input.parse({ league: 'nfl', ...bounds });
       await sportsGetSchedule.handler(input, ctx);
 
-      expect(mockEspnSvc.getScoreboard).toHaveBeenCalledWith('football', 'nfl', null, ctx);
-      expect(mockEspnSvc.getScoreboardRange).not.toHaveBeenCalled();
+      const date = bounds.date_from ?? bounds.date_to;
+      expect(mockEspnSvc.getScoreboardRange).toHaveBeenCalledWith(
+        'football',
+        'nfl',
+        date,
+        date,
+        ctx,
+      );
+      expect(mockEspnSvc.getScoreboard).not.toHaveBeenCalled();
     },
   );
 
@@ -283,16 +289,17 @@ describe('sportsGetSchedule', () => {
   });
 
   it.each([{ date_from: '2026-09-01' }, { date_to: '2026-09-30' }])(
-    'keeps the default MLB fetch for one-sided bounds %j',
+    'fetches the single MLB provider day for one-sided bounds %j',
     async (bounds) => {
-      mockMlbSvc.getSchedule.mockResolvedValue([]);
+      mockMlbSvc.getScheduleRange.mockResolvedValue([]);
       const ctx = createMockContext({ errors: sportsGetSchedule.errors });
       await sportsGetSchedule.handler(
         sportsGetSchedule.input.parse({ league: 'mlb', ...bounds }),
         ctx,
       );
-      expect(mockMlbSvc.getSchedule).toHaveBeenCalledWith(null, ctx);
-      expect(mockMlbSvc.getScheduleRange).not.toHaveBeenCalled();
+      const date = bounds.date_from ?? bounds.date_to;
+      expect(mockMlbSvc.getScheduleRange).toHaveBeenCalledWith(date, date, ctx);
+      expect(mockMlbSvc.getSchedule).not.toHaveBeenCalled();
     },
   );
 

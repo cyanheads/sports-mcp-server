@@ -16,7 +16,7 @@ import { EspnService } from '@/services/espn/espn-service.js';
 
 function stubFetch(body: unknown): void {
   const mockFetch = vi.mocked(fetch);
-  mockFetch.mockResolvedValueOnce(Response.json(body));
+  mockFetch.mockImplementation(async () => Response.json(body));
 }
 
 /** Build a minimal ESPN event stub. score can be a string (scoreboard) or an object (schedule). */
@@ -131,15 +131,28 @@ describe('EspnService.normalizeEvents', () => {
     expect(games[0].status).toBe('scheduled');
   });
 
-  it('preserves both bounds in a range scoreboard request', async () => {
-    stubFetch({ events: [makeEvent()] });
-
-    await svc.getScoreboardRange('football', 'nfl', '2026-09-01', '2026-09-30', ctx);
+  it('retrieves every day of a range without sending the rejected paired query', async () => {
+    vi.mocked(fetch).mockImplementation(async (input) =>
+      Response.json({
+        events: [makeEvent({ id: new URL(String(input)).searchParams.get('dates')! })],
+      }),
+    );
+    vi.mocked(fetch).mockClear();
+    const games = await svc.getScoreboardRange('football', 'nfl', '2026-09-01', '2026-09-02', ctx);
+    expect(games.map(({ id, providerDate }) => ({ id, providerDate }))).toEqual([
+      { id: 'espn:20260901', providerDate: '2026-09-01' },
+      { id: 'espn:20260902', providerDate: '2026-09-02' },
+    ]);
 
     expect(fetch).toHaveBeenCalledWith(
-      'https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard?dates=20260901-20260930',
+      'https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard?dates=20260901',
       expect.objectContaining({ signal: expect.any(AbortSignal) }),
     );
+    expect(fetch).toHaveBeenCalledWith(
+      'https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard?dates=20260902',
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    );
+    expect(fetch).toHaveBeenCalledTimes(2);
   });
 
   it('retries failed range requests through the shared fetch path', async () => {

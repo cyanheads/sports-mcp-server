@@ -7,10 +7,10 @@
 | Name | Description | Key Inputs | Annotations | Errors (reason → code, when) |
 |:-----|:------------|:-----------|:------------|:-----------------------------|
 | `sports_get_scores` | Live and final scores for a league (or optionally scoped to a team) on a given date. Returns each game with home/away teams, current score, status, period/clock, and UTC start time. Routes NFL/NBA/NHL/soccer → ESPN; MLB → StatsAPI. | `league` (enum), `date?` (YYYY-MM-DD), `team_name?` | `readOnlyHint: true`, `openWorldHint: true` | No games returns `games: []` with an informational `reason`; upstream failures retain HTTP classification |
-| `sports_get_schedule` | Upcoming and past fixtures for a team or league. Paired league-wide bounds reach the provider; ESPN results are filtered locally and MLB retains the provider's calendar assignment. ESPN team schedules fetch the season before local filtering. | `league` (enum), `team_name?`, `date_from?` (YYYY-MM-DD), `date_to?` (YYYY-MM-DD) | `readOnlyHint: true`, `openWorldHint: true` | `team_not_found` → `NotFound`, when team_name resolves to no record |
+| `sports_get_schedule` | Upcoming and past fixtures for a team or league. Dated requests acquire up to seven provider-calendar days, then page the games; no-bound ESPN team requests merge current-season phases and soccer fixtures. | `league` (enum), `team_name?`, `date_from?` (YYYY-MM-DD), `date_to?` (YYYY-MM-DD), `limit?`, `offset?` | `readOnlyHint: true`, `openWorldHint: true` | `team_not_found` → `NotFound`, when team_name resolves to no record; `ambiguous_team` → `ValidationError`, when several teams match |
 | `sports_get_standings` | Current standings or league table for a league and season. Returns team rank, W/L (or points), division rank, streak, and games behind. | `league` (enum), `season?` (YYYY) | `readOnlyHint: true`, `openWorldHint: true` | `season_not_found` → `NotFound`, when an explicit season has no standings data; omitted season returns empty standings with an off-season notice |
 | `sports_find_team` | Resolve a team name or partial name to canonical records and merged ESPN/MLB/TheSportsDB IDs. Team-scoped tools also accept names directly. | `query`, `league?` | `readOnlyHint: true`, `openWorldHint: true` | `no_match` → `NotFound`, when no team matches the query |
-| `sports_get_team` | Team detail: active roster (or squad), last 5 results, next 3 fixtures, venue, and team metadata. Combines multiple source calls internally. | `league` (enum), `team_name` | `readOnlyHint: true`, `openWorldHint: true` | `team_not_found` → `NotFound`, when team_name resolves to no record |
+| `sports_get_team` | Team detail: active roster (or squad), latest 5 completed results, next 3 future scheduled fixtures, venue, and team metadata. Combines multiple source calls internally. | `league` (enum), `team_name` | `readOnlyHint: true`, `openWorldHint: true` | `team_not_found` → `NotFound`, when team_name resolves to no record; `ambiguous_team` → `ValidationError`, when several teams match |
 | `sports_find_player` | Resolve a player name to their canonical record via TheSportsDB. Returns player ID, full name, current team, position, nationality, birth date, and thumbnail URL. Disambiguation step before player-scoped queries. | `query`, `sport?` | `readOnlyHint: true`, `openWorldHint: true` | `no_match` → `NotFound`, when no player matches the query |
 | `sports_get_player` | Player detail: bio, current team, position, nationality, birth date, height/weight, career description, and media thumbnail (TheSportsDB). | `player_id` (tsdb: prefixed or raw numeric) | `readOnlyHint: true`, `openWorldHint: true` | `player_not_found` → `NotFound`, when TheSportsDB returns HTTP 200 with `{"players": "Invalid Player ID passed"}` — must detect this shape explicitly |
 
@@ -64,9 +64,9 @@ Agents route by league; the service layer picks the source.
 | NHL | `hockey/nhl` | — | partial | ESPN primary |
 | EPL (soccer) | `soccer/eng.1` | — | `133604` league | ESPN primary |
 | MLS | `soccer/usa.1` | — | partial | ESPN primary |
-| College football | `football/college-football` | — | — | ESPN only; standings limited |
+| College football | `football/college-football` | — | — | FBS scoreboards (`groups=80`); team lookup uses ESPN's broader inventory |
 | Other soccer (Liga, Bundesliga, etc.) | varies (`soccer/esp.1`, `soccer/ger.1`, …) | — | partial | ESPN; league slugs documented below |
-| College basketball | `basketball/mens-college-basketball` | — | — | ESPN only; limited season |
+| College basketball | `basketball/mens-college-basketball` | — | — | Men's Division I scoreboards (`groups=50`), complete team inventory |
 
 **Soccer league slugs (verified working):**
 - EPL: `eng.1`
@@ -252,7 +252,7 @@ Live-probed: `site.api.espn.com/apis/site/v2/sports/football/nfl/standings` retu
 
 `sports_find_team` merges known IDs (`espnId`, `mlbId`, `tsdbId`) and metadata for matching team names. These identify a record across providers. Team-scoped tools take `team_name` and resolve or filter it themselves; they do not accept these IDs as inputs.
 
-The `team_name` parameter across tools accepts a fuzzy display name (e.g. "Mariners", "Seattle Seahawks", "Man United") — the service layer normalizes to the provider's ID internally. Agents can either call `sports_find_team` first for disambiguation or pass a name directly.
+Single-team tools prefer exact full display names and abbreviations, then require a unique partial name or location. Ambiguity returns canonical candidate names, abbreviations, and IDs; examples include "Mariners", "Seattle Seahawks", and "Manchester United". `sports_find_team` remains a multi-result search; score filters remain substring filters on the acquired slate.
 
 ### Source provenance in every output record
 
@@ -264,7 +264,11 @@ Tool league enums reject unsupported slugs through the framework's `invalid_argu
 
 ### Provider-calendar ranges remain authoritative
 
-Paired league-wide bounds reach ESPN as `dates=YYYYMMDD-YYYYMMDD` and MLB as `startDate`/`endDate`. Requests with no bounds or one bound retain the provider-default fetch and local filtering. Team-scoped MLB schedules use the supplied bounds or a default window from 14 days ago to 30 days ahead. An MLB request with a provider-applied range does not subsequently filter by UTC date: a late game can start the following UTC day while belonging to the requested provider calendar date.
+Schedule requests acquire at most seven provider-calendar days: one single-day scoreboard operation per ESPN day, or one inclusive MLB range. Single bounds mean one day. Provider membership remains authoritative, including games starting the next UTC day; a failed day fails the call rather than returning an apparently complete partial window. Omitted score dates use the US Eastern calendar day, including DST, without asserting that every provider uses that timezone.
+
+Game pages default to 100 rows and cap at 200, with larger requests clamped and disclosed. Deduplicate IDs before sorting by provider day, UTC start, and ID. `availableGames` counts only the acquired window after team filtering, never the full requested range. `nextOffset` repeats the original bounds; `nextDateFrom` appears only after the final game page and retains the original requested end. Pages reacquire their window, so live results are not a snapshot.
+
+No-bound league reads retain their provider default. ESPN no-bound team reads merge soccer results/fixtures or US sport phases using the provider season year (NBA can use the following year). Event and requested phase remain authoritative even when top-level phase metadata is stale. Recent results sort latest-first; scheduled upcoming fixtures sort earliest-first using the full start instant. MLB no-bound team schedules keep their 14-day history and 30-day lookahead; team summaries keep their 30-day history and lookahead.
 
 ### Third-party text stays data
 
@@ -280,9 +284,9 @@ Base: `https://site.api.espn.com`
 
 | Endpoint | Pattern | Live-verified |
 |:---------|:--------|:-------------|
-| Scoreboard | `GET /apis/site/v2/sports/{sport}/{league}/scoreboard[?dates=YYYYMMDD]` or `dates=YYYYMMDD-YYYYMMDD` | NFL, NBA, NHL, soccer EPL/MLS; range availability depends on ESPN |
-| Schedule (team) | `GET /apis/site/v2/sports/{sport}/{league}/teams/{teamId}/schedule[?season=YYYY]` | ✓ NFL team 26, NBA team 16 — returns full season; `date_from`/`date_to` filtering is MCP-side |
-| Teams list | `GET /apis/site/v2/sports/{sport}/{league}/teams` | ✓ NFL (32 teams) |
+| Scoreboard | `GET /apis/site/v2/sports/{sport}/{league}/scoreboard[?dates=YYYYMMDD]`; basketball `groups=50`, football `groups=80` | NFL, NBA, NHL, soccer EPL/MLS; paired ranges are acquired one day at a time |
+| Schedule (team) | `GET /apis/site/v2/sports/{sport}/{league}/teams/{teamId}/schedule[?season=YYYY&seasontype=N]`; soccer `fixture=true` | NFL, NBA, soccer; merged for no-bound team queries. Dated team queries use scoreboard membership |
+| Teams list | `GET /apis/site/v2/sports/{sport}/{league}/teams`; college `limit=1000` | NFL and complete college inventories; scoreboard queries never reuse this limit |
 | Team detail | `GET /apis/site/v2/sports/{sport}/{league}/teams/{teamId}` | ✓ NFL team 26 |
 | Team roster | `GET /apis/site/v2/sports/{sport}/{league}/teams/{teamId}/roster` | ✓ NFL team 26 (grouped by position: `athletes[].position`, `athletes[].items[]`) |
 | Standings | `GET /apis/v2/sports/{sport}/{league}/standings[?season=YYYY&type=2]` | ✓ NFL, soccer EPL |
@@ -349,8 +353,8 @@ TheSportsDB `idESPN` on team records cross-references to the ESPN team ID — us
 
 - **TheSportsDB free tier returns no live scores or standings.** `eventsday.php` reliably returns 0 events on the free tier even during active match days. Player and team metadata is the only reliable data from this source on key `3`.
 - **ESPN is undocumented and unofficial.** Schema changes could break the service layer without warning. EspnService is isolated with explicit normalization so any shape change is contained to one file.
-- **ESPN college data is limited.** Scoreboard works (99 events live-verified), but standings depth and team roster data vary by conference and season.
+- **College coverage is explicit.** Men's basketball scoreboards cover Division I; football scoreboards cover FBS. College team inventories can contain programs outside scoreboard scope; standings depth and roster data vary.
 - **NHL standings: no `winPercent` stat.** NHL uses a points system (wins/OT losses/losses); the `winPercent` stat ESPN returns for NFL/NBA is absent from NHL standings entries. `NormalizedStanding.winningPercentage` will always be null for NHL; use `points` instead.
 - **MLB StatsAPI division names can be null.** `records[].division.nameShort` was null in a live probe of the 2026 standings — use `division.id` to map to division names from the teams endpoint.
 - **Provider calendar dates can differ from UTC start dates.** Both output surfaces retain the provider's UTC start string. An MLB provider-applied date range retains late games even when their UTC start falls on the next day.
-- **No historical scores beyond ESPN's window.** ESPN's scoreboard only covers the current season's games accessible via date parameter. For deep historical data, neither ESPN nor TheSportsDB free tier is sufficient; MLB StatsAPI covers historical MLB schedules back to 1871.
+- **Historical coverage varies by provider.** ESPN date scoreboards include historical seasons, but deep-history availability is not guaranteed. TheSportsDB free tier does not supply scores; MLB StatsAPI covers historical MLB schedules back to 1871.

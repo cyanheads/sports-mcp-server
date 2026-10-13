@@ -151,7 +151,10 @@ describe.each(cases)('$tool.name formatting', ({ tool, input, output, heading })
   it('preserves ordinary text and every declared structured field', async () => {
     const parsed = tool.output.parse(output);
     const before = structuredClone(parsed);
-    const response = await runToolContract({ ...tool, handler: async () => parsed }, input);
+    const response = await runToolContract(
+      { ...tool, enrichment: undefined, handler: async () => parsed },
+      input,
+    );
     expect(response.isError).not.toBe(true);
     expect(response.structuredContent).toEqual(before);
     const text = response.content
@@ -165,7 +168,10 @@ describe.each(cases)('$tool.name formatting', ({ tool, input, output, heading })
   it('flattens CR/LF in every inline slot while structured values stay verbatim', async () => {
     const parsed = tool.output.parse(multiline(output));
     const before = structuredClone(parsed);
-    const response = await runToolContract({ ...tool, handler: async () => parsed }, input);
+    const response = await runToolContract(
+      { ...tool, enrichment: undefined, handler: async () => parsed },
+      input,
+    );
     expect(response.isError).not.toBe(true);
     expect(response.structuredContent).toEqual(before);
     const text = response.content

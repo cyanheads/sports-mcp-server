@@ -5,11 +5,11 @@
 
 import { tool, z } from '@cyanheads/mcp-ts-core';
 import { JsonRpcErrorCode } from '@cyanheads/mcp-ts-core/errors';
-import { withRetry } from '@cyanheads/mcp-ts-core/utils';
+import { addCalendarDays, dateWindow } from '@/services/date-window.js';
 import { getEspnService } from '@/services/espn/espn-service.js';
-import { fetchProviderText } from '@/services/fetch-provider-text.js';
 import { getMlbService } from '@/services/mlb/mlb-service.js';
-import { LEAGUE_ROUTES, type NormalizedGame } from '@/services/types.js';
+import { ambiguityDetails, teamCandidates } from '@/services/team-resolver.js';
+import { LEAGUE_ROUTES, type NormalizedGame, type NormalizedTeam } from '@/services/types.js';
 import { inline } from '../formatting.js';
 
 const LEAGUE_ENUM = z.enum([
@@ -30,7 +30,7 @@ const LEAGUE_ENUM = z.enum([
 
 export const sportsGetSchedule = tool('sports_get_schedule', {
   description:
-    'Upcoming and past fixtures for a team or full league over a date range, including opponents, home and away teams, UTC start time, venue, and final result when available.',
+    'Upcoming and past fixtures for a team or league, with provider-calendar date windows of up to seven days and paged games. No dates uses the provider default slate, or the current season for an ESPN team (MLB teams: 14 days back to 30 ahead). NCAAB covers men’s Division I; NCAAF scoreboards cover FBS. Returns opponents, UTC start, venue, and available results.',
 
   annotations: { readOnlyHint: true, openWorldHint: true },
 
@@ -43,18 +43,46 @@ export const sportsGetSchedule = tool('sports_get_schedule', {
       .max(200, 'Team name must be 200 characters or fewer.')
       .optional()
       .describe(
-        'Team name or partial name to filter schedule. Fuzzy match. Omit for league-wide schedule.',
+        'Exact full name or abbreviation takes precedence; partial names or locations must identify one team. Omit for league-wide schedule.',
       ),
     date_from: z
-      .string()
-      .regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be in YYYY-MM-DD format.')
-      .optional()
-      .describe('Start of date range in YYYY-MM-DD format. Inclusive.'),
+      .preprocess(
+        (value) => (typeof value === 'string' && !value.trim() ? undefined : value),
+        z
+          .string()
+          .regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be in YYYY-MM-DD format.')
+          .optional(),
+      )
+      .describe(
+        'Inclusive provider-calendar start date, YYYY-MM-DD. A single bound requests that day.',
+      ),
     date_to: z
-      .string()
-      .regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be in YYYY-MM-DD format.')
+      .preprocess(
+        (value) => (typeof value === 'string' && !value.trim() ? undefined : value),
+        z
+          .string()
+          .regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be in YYYY-MM-DD format.')
+          .optional(),
+      )
+      .describe(
+        'Inclusive provider-calendar end date, YYYY-MM-DD. Retain this original end when continuing.',
+      ),
+    limit: z
+      .number()
+      .int()
+      .positive()
       .optional()
-      .describe('End of date range in YYYY-MM-DD format. Inclusive.'),
+      .describe(
+        'Games per page, default 100. Requests above 200 are clamped to 200 with disclosure.',
+      ),
+    offset: z
+      .number()
+      .int()
+      .nonnegative()
+      .optional()
+      .describe(
+        'Game offset in the served window, default 0. Use nextOffset with the original date bounds.',
+      ),
   }),
 
   output: z.object({
@@ -104,7 +132,52 @@ export const sportsGetSchedule = tool('sports_get_schedule', {
     totalReturned: z.number().describe('Total number of games returned.'),
   }),
 
+  enrichment: {
+    requestedDateFrom: z
+      .string()
+      .optional()
+      .describe('Original inclusive start of the dated request.'),
+    requestedDateTo: z
+      .string()
+      .optional()
+      .describe('Original inclusive end of the dated request; retain when advancing date_from.'),
+    servedDateFrom: z.string().optional().describe('First provider day acquired in this call.'),
+    servedDateTo: z
+      .string()
+      .optional()
+      .describe(
+        'Last provider day acquired in this call, at most seven days after the first inclusive.',
+      ),
+    scope: z.string().describe('Acquisition scope when dates are absent or bounded.'),
+    coverage: z.string().optional().describe('College scoreboard coverage when applicable.'),
+    availableGames: z
+      .number()
+      .describe(
+        'Games available in the acquired window after filtering, never a total for unserved dates.',
+      ),
+    effectiveLimit: z.number().describe('Applied game page size, at most 200.'),
+    offset: z.number().describe('Applied game offset in the acquired window.'),
+    truncated: z.boolean().describe('Whether game rows or requested dates remain unserved.'),
+    nextOffset: z
+      .number()
+      .optional()
+      .describe('Next game offset; repeat the original bounds before advancing the date window.'),
+    nextDateFrom: z
+      .string()
+      .optional()
+      .describe(
+        'Next provider-day window start, offered only after the final game page; retain requestedDateTo.',
+      ),
+    notice: z.string().optional().describe('Limit clamping or continuation guidance.'),
+  },
+
   errors: [
+    {
+      reason: 'ambiguous_team',
+      code: JsonRpcErrorCode.ValidationError,
+      when: 'The team selector matches more than one canonical team.',
+      recovery: 'Choose an exact full name or abbreviation from the supplied candidates.',
+    },
     {
       reason: 'team_not_found',
       code: JsonRpcErrorCode.NotFound,
@@ -114,167 +187,122 @@ export const sportsGetSchedule = tool('sports_get_schedule', {
   ],
 
   async handler(input, ctx) {
-    // biome-ignore lint/style/noNonNullAssertion: Zod enum guarantees input.league is always a key in LEAGUE_ROUTES
+    // biome-ignore lint/style/noNonNullAssertion: Zod enum guarantees a key in LEAGUE_ROUTES
     const route = LEAGUE_ROUTES[input.league]!;
-    ctx.log.info('Fetching schedule', { league: input.league, team: input.team_name });
-
-    let games: NormalizedGame[] = [];
-    let providerDateRangeApplied = false;
+    const window = dateWindow(input.date_from, input.date_to);
+    const teamFilter = input.team_name?.trim();
+    const effectiveLimit = Math.min(input.limit ?? 100, 200);
+    const offset = input.offset ?? 0;
+    let games: NormalizedGame[];
+    let scope = window ? 'provider-calendar date window' : 'provider-default league slate';
+    let team: NormalizedTeam | undefined;
+    if (teamFilter) {
+      const teams = route.mlbLeagueId
+        ? await getMlbService().getTeams(null, ctx)
+        : await getEspnService().getTeams(route.espnSport, route.espnLeague, ctx);
+      const candidates = teamCandidates(teams, teamFilter);
+      team = candidates[0];
+      if (!team)
+        throw ctx.fail(
+          'team_not_found',
+          `No team found matching "${teamFilter}" in ${input.league}.`,
+        );
+      if (candidates.length > 1)
+        throw ctx.fail(
+          'ambiguous_team',
+          `Team selector "${teamFilter}" is ambiguous.`,
+          ambiguityDetails(candidates),
+        );
+    }
 
     if (route.mlbLeagueId) {
-      // MLB: fetch schedule (no date = today's, we fetch a wider range below)
-      // For schedule we want multiple dates — use a wide window
-      const from =
-        input.date_from ?? new Date(Date.now() - 14 * 86400_000).toISOString().slice(0, 10);
-      const to = input.date_to ?? new Date(Date.now() + 30 * 86400_000).toISOString().slice(0, 10);
-
-      if (input.team_name) {
-        providerDateRangeApplied = true;
-        // Get teams to find team ID
-        const teams = await getMlbService().getTeams(null, ctx);
-        const q = input.team_name.toLowerCase();
-        const team = teams.find(
-          (t) =>
-            t.name.toLowerCase().includes(q) ||
-            t.displayName.toLowerCase().includes(q) ||
-            t.abbreviation.toLowerCase() === q,
-        );
-        if (!team)
-          throw ctx.fail('team_not_found', `No MLB team found matching "${input.team_name}".`);
-
-        // Fetch schedule for multiple individual dates would be expensive; use date range via MLB API
-        const url = `https://statsapi.mlb.com/api/v1/schedule?sportId=1&hydrate=team,linescore&teamId=${team.mlbId}&startDate=${from}&endDate=${to}`;
-        const data = await withRetry(
-          async (attempt) => {
-            const text = await fetchProviderText(url, ctx, attempt);
-            return JSON.parse(text) as { dates?: unknown[] };
-          },
-          {
-            operation: 'mlb-team-schedule',
-            context: ctx,
-            baseDelayMs: 1000,
-            signal: ctx.signal,
-            deadlineMs: 30_000,
-          },
-        );
-        const allGames: NormalizedGame[] = [];
-        for (const d of data?.dates ?? []) {
-          const dateObj = d as Record<string, unknown>;
-          for (const g of (dateObj.games as unknown[]) ?? []) {
-            const game = g as Record<string, unknown>;
-            const teams2 = game.teams as Record<string, unknown> | undefined;
-            const homeRaw = teams2?.home as Record<string, unknown> | undefined;
-            const awayRaw = teams2?.away as Record<string, unknown> | undefined;
-            const homeTeam = homeRaw?.team as Record<string, unknown> | undefined;
-            const awayTeam = awayRaw?.team as Record<string, unknown> | undefined;
-            const status2 = game.status as Record<string, unknown> | undefined;
-            const abstractState = String(status2?.abstractGameState ?? 'Preview');
-            const detailedState = String(status2?.detailedState ?? 'Scheduled');
-            const homeAbbr = String(homeTeam?.abbreviation ?? '');
-            const awayAbbr = String(awayTeam?.abbreviation ?? '');
-            allGames.push({
-              id: `mlb:${String(game.gamePk ?? '')}`,
-              shortName: `${awayAbbr} @ ${homeAbbr}`,
-              homeTeam: {
-                id: `mlb:${String(homeTeam?.id ?? '')}`,
-                name: String(homeTeam?.name ?? ''),
-                abbreviation: homeAbbr,
-                score: homeRaw?.score != null ? String(homeRaw.score) : null,
-              },
-              awayTeam: {
-                id: `mlb:${String(awayTeam?.id ?? '')}`,
-                name: String(awayTeam?.name ?? ''),
-                abbreviation: awayAbbr,
-                score: awayRaw?.score != null ? String(awayRaw.score) : null,
-              },
-              status: (abstractState === 'Live'
-                ? 'in-progress'
-                : abstractState === 'Final'
-                  ? detailedState.includes('Postponed')
-                    ? 'postponed'
-                    : 'final'
-                  : 'scheduled') as
-                | 'scheduled'
-                | 'in-progress'
-                | 'final'
-                | 'postponed'
-                | 'cancelled',
-              period: null,
-              clock: null,
-              startTimeUtc: String(game.gameDate ?? ''),
-              venue:
-                (game.venue as Record<string, unknown>)?.name != null
-                  ? String((game.venue as Record<string, unknown>).name)
-                  : null,
-              source: 'mlbstats' as const,
-            });
-          }
-        }
-        games = allGames;
+      if (team) {
+        const from =
+          window?.servedDateFrom ?? addCalendarDays(new Date().toISOString().slice(0, 10), -14);
+        const to =
+          window?.servedDateTo ?? addCalendarDays(new Date().toISOString().slice(0, 10), 30);
+        if (!team.mlbId) throw ctx.fail('team_not_found', `No MLB ID for "${teamFilter}".`);
+        games = await getMlbService().getTeamScheduleRange(team.mlbId, from, to, ctx);
+        if (!window) scope = `MLB team window ${from} through ${to}`;
       } else {
-        if (input.date_from && input.date_to) {
-          providerDateRangeApplied = true;
-          games = await getMlbService().getScheduleRange(input.date_from, input.date_to, ctx);
-        } else {
-          games = await getMlbService().getSchedule(null, ctx);
-        }
+        games = window
+          ? await getMlbService().getScheduleRange(window.servedDateFrom, window.servedDateTo, ctx)
+          : await getMlbService().getSchedule(null, ctx);
       }
     } else {
-      // ESPN path: need team ID to fetch team schedule
-      if (input.team_name) {
-        const espnTeams = await getEspnService().getTeams(route.espnSport, route.espnLeague, ctx);
-        const q = input.team_name.toLowerCase();
-        const team = espnTeams.find(
-          (t) =>
-            t.name.toLowerCase().includes(q) ||
-            t.displayName.toLowerCase().includes(q) ||
-            t.abbreviation.toLowerCase() === q ||
-            t.location.toLowerCase().includes(q),
+      if (window) {
+        games = await getEspnService().getScoreboardRange(
+          route.espnSport,
+          route.espnLeague,
+          window.servedDateFrom,
+          window.servedDateTo,
+          ctx,
         );
-        if (!team)
-          throw ctx.fail(
-            'team_not_found',
-            `No team found matching "${input.team_name}" in ${input.league}.`,
+        if (team)
+          games = games.filter(
+            (game) => game.homeTeam.id === team.id || game.awayTeam.id === team.id,
           );
-        const teamId = team.espnId ?? team.id.replace('espn:', '');
+      } else if (team) {
         games = await getEspnService().getTeamSchedule(
           route.espnSport,
           route.espnLeague,
-          teamId,
+          team.espnId ?? team.id.replace('espn:', ''),
           null,
           ctx,
         );
+        scope = 'ESPN team current provider season, merged phases and soccer fixtures';
       } else {
-        games =
-          input.date_from && input.date_to
-            ? await getEspnService().getScoreboardRange(
-                route.espnSport,
-                route.espnLeague,
-                input.date_from,
-                input.date_to,
-                ctx,
-              )
-            : await getEspnService().getScoreboard(route.espnSport, route.espnLeague, null, ctx);
+        games = await getEspnService().getScoreboard(route.espnSport, route.espnLeague, null, ctx);
       }
     }
 
-    // Apply date range filter
-    if ((input.date_from || input.date_to) && !providerDateRangeApplied) {
-      games = games.filter((g) => {
-        const gameDate = g.startTimeUtc.slice(0, 10);
-        if (input.date_from && gameDate < input.date_from) return false;
-        if (input.date_to && gameDate > input.date_to) return false;
-        return true;
-      });
-    }
-
+    games = [...new Map(games.map((game) => [game.id, game])).values()];
+    games.sort(
+      (a, b) =>
+        (a.providerDate ?? '').localeCompare(b.providerDate ?? '') ||
+        a.startTimeUtc.localeCompare(b.startTimeUtc) ||
+        a.id.localeCompare(b.id),
+    );
+    const availableGames = games.length;
+    const page = games
+      .slice(offset, offset + effectiveLimit)
+      .map(({ providerDate: _day, ...game }) => game);
+    const rowsRemain = offset + page.length < availableGames;
+    const datesRemain = !!window && window.servedDateTo < window.requestedDateTo;
+    const nextOffset = rowsRemain ? offset + page.length : undefined;
+    const nextDateFrom =
+      !rowsRemain && datesRemain && window ? addCalendarDays(window.servedDateTo, 1) : undefined;
+    const clamped = (input.limit ?? 100) > effectiveLimit;
+    const continuation = rowsRemain
+      ? 'Continue with nextOffset and the original date_from/date_to. Finish game pages before advancing dates.'
+      : datesRemain
+        ? 'Continue with nextDateFrom as date_from and retain requestedDateTo as date_to.'
+        : '';
+    ctx.enrich({
+      ...window,
+      scope,
+      availableGames,
+      effectiveLimit,
+      offset,
+      truncated: rowsRemain || datesRemain,
+      ...(input.league === 'ncaaf'
+        ? { coverage: 'FBS scoreboards; ESPN inventory can include other football levels.' }
+        : {}),
+      ...(input.league === 'ncaab' ? { coverage: 'Men’s Division I basketball.' } : {}),
+      ...(nextOffset != null ? { nextOffset } : {}),
+      ...(nextDateFrom ? { nextDateFrom } : {}),
+      ...(clamped || continuation
+        ? {
+            notice: `${clamped ? `Requested limit ${input.limit} clamped to 200. ` : ''}${continuation}`,
+          }
+        : {}),
+    });
     return {
-      games,
+      games: page,
       league: input.league,
-      ...(input.team_name ? { teamFilter: input.team_name } : {}),
-      ...(input.date_from ? { dateFrom: input.date_from } : {}),
-      ...(input.date_to ? { dateTo: input.date_to } : {}),
-      totalReturned: games.length,
+      ...(teamFilter ? { teamFilter } : {}),
+      ...(window ? { dateFrom: window.requestedDateFrom, dateTo: window.requestedDateTo } : {}),
+      totalReturned: page.length,
     };
   },
 

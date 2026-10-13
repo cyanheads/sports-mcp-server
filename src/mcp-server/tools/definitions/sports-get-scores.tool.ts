@@ -4,6 +4,7 @@
  */
 
 import { tool, z } from '@cyanheads/mcp-ts-core';
+import { easternToday } from '@/services/date-window.js';
 import { getEspnService } from '@/services/espn/espn-service.js';
 import { getMlbService } from '@/services/mlb/mlb-service.js';
 import { LEAGUE_ROUTES } from '@/services/types.js';
@@ -27,7 +28,7 @@ const LEAGUE_ENUM = z.enum([
 
 export const sportsGetScores = tool('sports_get_scores', {
   description:
-    "Live and final scores for a league on a given date, optionally filtered by team name. Returns home and away teams, current score, status, period or clock, and UTC start time. Omit date for today's games.",
+    "Live and final scores for a league on a given provider-calendar date, optionally filtered by team name. Returns teams, scores, status, period or clock, and UTC start. Omitted dates use today's US Eastern calendar day, including daylight saving time. NCAAB covers men's Division I; NCAAF covers FBS.",
 
   annotations: { readOnlyHint: true, openWorldHint: true },
 
@@ -39,7 +40,7 @@ export const sportsGetScores = tool('sports_get_scores', {
       .string()
       .regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be in YYYY-MM-DD format.')
       .optional()
-      .describe("Date in YYYY-MM-DD format. Omit for today's games."),
+      .describe("Provider-calendar date in YYYY-MM-DD format. Omit for today's US Eastern day."),
     team_name: z
       .string()
       .max(200, 'Team name must be 200 characters or fewer.')
@@ -105,18 +106,32 @@ export const sportsGetScores = tool('sports_get_scores', {
     reason: z.string().optional().describe('Human-readable note when no games are found.'),
   }),
 
+  enrichment: {
+    emptyReason: z
+      .enum(['no_games', 'no_team_matches'])
+      .optional()
+      .describe('Whether the provider slate was empty or the team filter removed all games.'),
+    notice: z
+      .string()
+      .optional()
+      .describe('Explanation of an empty result and the applied filter.'),
+    coverage: z.string().optional().describe('College scoreboard coverage when applicable.'),
+  },
+
   async handler(input, ctx) {
     // biome-ignore lint/style/noNonNullAssertion: Zod enum guarantees input.league is always a key in LEAGUE_ROUTES
     const route = LEAGUE_ROUTES[input.league]!;
-    const effectiveDate = input.date ?? new Date().toISOString().slice(0, 10);
+    const effectiveDate = input.date ?? easternToday();
     ctx.log.info('Fetching scores', { league: input.league, date: effectiveDate });
 
     let games = route.mlbLeagueId
       ? await getMlbService().getSchedule(effectiveDate, ctx)
       : await getEspnService().getScoreboard(route.espnSport, route.espnLeague, effectiveDate, ctx);
 
-    if (input.team_name) {
-      const q = input.team_name.toLowerCase();
+    const providerGames = games.length;
+    const teamFilter = input.team_name?.trim();
+    if (teamFilter) {
+      const q = teamFilter.toLowerCase();
       games = games.filter(
         (g) =>
           g.homeTeam.name.toLowerCase().includes(q) ||
@@ -128,8 +143,18 @@ export const sportsGetScores = tool('sports_get_scores', {
 
     const reason =
       games.length === 0
-        ? `No games found for ${input.league.toUpperCase()} on ${effectiveDate}.`
+        ? providerGames && teamFilter
+          ? `No games matched team filter "${teamFilter}" for ${input.league.toUpperCase()} on ${effectiveDate}.`
+          : `No games found for ${input.league.toUpperCase()} on ${effectiveDate}.`
         : undefined;
+
+    ctx.enrich({
+      ...(reason
+        ? { emptyReason: providerGames ? 'no_team_matches' : 'no_games', notice: reason }
+        : {}),
+      ...(input.league === 'ncaaf' ? { coverage: 'FBS football.' } : {}),
+      ...(input.league === 'ncaab' ? { coverage: "Men's Division I basketball." } : {}),
+    });
 
     return {
       games,

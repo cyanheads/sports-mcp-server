@@ -18,6 +18,8 @@ export interface NormalizedGame {
   homeTeam: { id: string; name: string; abbreviation: string; score: string | null };
   id: string;
   period: number | null;
+  /** Provider-assigned calendar day used for schedule ordering, independent of UTC start. */
+  providerDate?: string;
   shortName: string;
   source: 'espn' | 'mlbstats';
   startTimeUtc: string;

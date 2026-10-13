@@ -40,7 +40,7 @@ export const sportsFindTeam = tool('sports_find_team', {
       .regex(/\S/, 'Team name must contain at least one non-whitespace character.')
       .max(200, 'Team name must be 200 characters or fewer.')
       .describe(
-        'Team name or partial name to search for, e.g. "Mariners", "Man United", "Seattle Seahawks".',
+        'Team name or partial name to search for, e.g. "Mariners", "Manchester United", "Seattle Seahawks".',
       ),
     league: LEAGUE_ENUM.optional().describe(
       'Narrow search to a specific league. Optional but recommended for faster results.',
@@ -94,7 +94,7 @@ export const sportsFindTeam = tool('sports_find_team', {
 
   async handler(input, ctx) {
     ctx.log.info('Finding team', { query: input.query, league: input.league });
-    const q = input.query.toLowerCase();
+    const q = input.query.trim().toLowerCase();
 
     const results: NormalizedTeam[] = [];
 

@@ -7,7 +7,7 @@
 
 <div align="center">
 
-[![Version](https://img.shields.io/badge/Version-0.2.3-blue.svg?style=flat-square)](./CHANGELOG.md) [![License](https://img.shields.io/badge/License-Apache%202.0-orange.svg?style=flat-square)](./LICENSE) [![Docker](https://img.shields.io/badge/Docker-ghcr.io-2496ED?style=flat-square&logo=docker&logoColor=white)](https://github.com/users/cyanheads/packages/container/package/sports-mcp-server) [![MCP SDK](https://img.shields.io/badge/MCP%20SDK-^2.1.0-green.svg?style=flat-square)](https://modelcontextprotocol.io/) [![npm](https://img.shields.io/npm/v/@cyanheads/sports-mcp-server?style=flat-square&logo=npm&logoColor=white)](https://www.npmjs.com/package/@cyanheads/sports-mcp-server) [![TypeScript](https://img.shields.io/badge/TypeScript-^7.0.2-3178C6.svg?style=flat-square)](https://www.typescriptlang.org/) [![Bun](https://img.shields.io/badge/Bun-v1.4.2%2B-blueviolet.svg?style=flat-square)](https://bun.sh/)
+[![Version](https://img.shields.io/badge/Version-0.2.3-blue.svg?style=flat-square)](./CHANGELOG.md) [![License](https://img.shields.io/badge/License-Apache%202.0-orange.svg?style=flat-square)](./LICENSE) [![Docker](https://img.shields.io/badge/Docker-ghcr.io-2496ED?style=flat-square&logo=docker&logoColor=white)](https://github.com/users/cyanheads/packages/container/package/sports-mcp-server) [![MCP SDK](https://img.shields.io/badge/MCP%20SDK-^2.3.1-green.svg?style=flat-square)](https://modelcontextprotocol.io/) [![npm](https://img.shields.io/npm/v/@cyanheads/sports-mcp-server?style=flat-square&logo=npm&logoColor=white)](https://www.npmjs.com/package/@cyanheads/sports-mcp-server) [![TypeScript](https://img.shields.io/badge/TypeScript-^7.0.2-3178C6.svg?style=flat-square)](https://www.typescriptlang.org/) [![Bun](https://img.shields.io/badge/Bun-v1.4.3%2B-blueviolet.svg?style=flat-square)](https://bun.sh/)
 
 </div>
 
@@ -23,7 +23,7 @@
 
 ## Overview
 
-Live and historical sports data from ESPN, MLB StatsAPI, and TheSportsDB. Look up teams and players, check scores, schedules, and standings across NFL, NBA, MLB, NHL, and major soccer leagues from any MCP client. Runs as a stdio process or a local Streamable HTTP server.
+Live and historical sports data from ESPN, MLB StatsAPI, and TheSportsDB. Look up teams and players, check scores, schedules, and standings across NFL, NBA, MLB, NHL, and major soccer leagues from any MCP client. College basketball covers men's Division I; college football scoreboards cover FBS, while team lookup uses ESPN's broader inventory. Runs as a stdio process or a local Streamable HTTP server.
 
 ### Tools
 
@@ -55,16 +55,18 @@ Live and historical sports data from ESPN, MLB StatsAPI, and TheSportsDB. Look u
 
 ### `sports_get_scores` <sub>tool</sub>
 
-- `league` required; `date` (YYYY-MM-DD) defaults to today; optional `team_name` filters to one team's game
-- Returns home/away teams, score, status, period or clock, and UTC start time; no games returns `games: []` with a `reason`
+- `league` required; `date` (YYYY-MM-DD) defaults to today's US Eastern calendar day, including daylight saving time; optional `team_name` filters games
+- Returns home/away teams, score, status, period or clock, and UTC start time. Empty results retain `reason` and add typed `emptyReason` (`no_games` or `no_team_matches`) and `notice` on both response surfaces
 
 ---
 
 ### `sports_get_schedule` <sub>tool</sub>
 
-- `league` required; optional `team_name`, and `date_from`/`date_to` (YYYY-MM-DD, inclusive)
-- Returns home/away teams and scores, status, UTC start time, venue, and source; `team_not_found` when the team doesn't resolve in the league
-- Paired league-wide bounds are sent upstream; no bounds or one bound keep the provider-default fetch and local filtering. MLB range results preserve provider calendar dates, including games starting the next UTC day
+- `league` required; optional `team_name`, inclusive provider-calendar `date_from`/`date_to`, `limit` (default 100, capped at 200), and nonnegative `offset` (default 0). A single date bound requests that day; impossible or reversed dates fail before fetching
+- Returns home/away teams and scores, status, UTC start time, venue, and source. Exact full names and abbreviations take precedence; partial selectors must identify one team. `ambiguous_team` lists canonical candidates; `team_not_found` means no match
+- Dated requests acquire at most seven days, preserving provider membership across UTC midnight. Both surfaces disclose `requestedDateFrom`/`requestedDateTo`, `servedDateFrom`/`servedDateTo`, `availableGames` in that served window, `effectiveLimit`, `offset`, and `truncated`
+- Follow `nextOffset` with the original bounds until the final game page. Only then use `nextDateFrom` as `date_from`, retaining `requestedDateTo` as `date_to`. Each page reacquires the served window; live data can change between calls
+- Without dates, league reads keep the provider default; ESPN team reads merge the current provider season's phases and soccer results/fixtures. MLB team reads span 14 days back to 30 ahead. These returned slates also support game pagination
 
 ---
 
@@ -77,8 +79,8 @@ Live and historical sports data from ESPN, MLB StatsAPI, and TheSportsDB. Look u
 
 ### `sports_get_team` <sub>tool</sub>
 
-- `league` and `team_name` required (fuzzy match on name, abbreviation, or location)
-- Returns metadata, active roster, up to 5 completed results, and up to 3 upcoming fixtures; `team_not_found` when the team doesn't resolve in the league
+- `league` and `team_name` required; exact full names or abbreviations take precedence, otherwise partial names or locations must identify one team (`ambiguous_team` includes candidates)
+- Returns metadata, active roster, the latest 5 completed results, and the next 3 scheduled fixtures by start instant; `team_not_found` when the team doesn't resolve in the league. ESPN merges current-season phases and soccer fixtures; MLB uses a 30-day history and lookahead
 
 ---
 
@@ -103,9 +105,9 @@ Sports-specific:
 Agent-friendly output:
 
 - Source provenance on every record — `source: 'espn' | 'mlbstats' | 'thesportsdb'` — so agents can reason about data authority
-- Structured `reason` field on empty score responses, and an enrichment notice on off-season standings, so agents can explain results without treating them as errors
+- Typed empty-score notices alongside the compatible `reason` field, plus schedule window and continuation metadata on both response surfaces
 - Cross-source IDs surfaced by `sports_find_team` — `espnId`, `mlbId`, `tsdbId` — identify the same team across providers; team-scoped tools resolve `team_name` independently
-- Typed error reasons (`no_match`, `team_not_found`, `player_not_found`, `season_not_found`) each carrying an actionable recovery hint
+- Typed error reasons (`no_match`, `team_not_found`, `ambiguous_team`, `player_not_found`, `season_not_found`) each carrying an actionable recovery hint
 - Upstream HTTP errors retain their status and bounded diagnostics; ESPN scoreboard input rejections include date/bounds guidance. Optional-source outages degrade gracefully, while input rejections and cancellation propagate
 - Formatted provider fields stay on their authored lines, and full player biographies appear in text fences; structured values remain verbatim. Provider content is data, never instructions
 
@@ -225,6 +227,8 @@ See [`.env.example`](./.env.example) for the full list of optional overrides.
 ## Running the server
 
 ### Local development
+
+Serving commands execute Node, including when launched with `bun run`. Bun handles dependency resolution and build tooling; ESPN requests run under Node.
 
 - **Build and run:**
 

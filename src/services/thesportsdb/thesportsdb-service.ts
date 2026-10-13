@@ -26,7 +26,11 @@ export class TheSportsDbService {
   private fetchJson<T>(url: string, ctx: Context): Promise<T> {
     return withRetry(
       async ({ signal, remainingMs }) => {
-        // The API key is a path segment; fetchWithTimeout logs paths before a caller can redact them.
+        /**
+         * fetchWithTimeout redacts URL paths, but logs non-2xx bodies and network
+         * causes before this service can scrub a provider-echoed API key.
+         * Keep native fetch here; httpErrorFromResponse supplies HTTP classification.
+         */
         const controller = new AbortController();
         const timeoutMs = Math.min(10_000, remainingMs);
         const timeoutReason = new DOMException('TheSportsDB attempt timed out.', 'TimeoutError');
