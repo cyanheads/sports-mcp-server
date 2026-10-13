@@ -1,6 +1,6 @@
 # sports-mcp-server - Directory Structure
 
-Generated on: 2026-09-30 09:27:49
+Generated on: 2026-10-13 13:01:07
 
 ```text
 sports-mcp-server/
@@ -26,6 +26,7 @@ sports-mcp-server/
 ├── changelog/
 │   ├── 0.1.x/
 │   ├── 0.2.x/
+│   ├── 0.3.x/
 │   └── template.md
 ├── docs/
 │   ├── design.md
@@ -132,6 +133,7 @@ sports-mcp-server/
 │   ├── lint-mcp.ts
 │   ├── lint-packaging.ts
 │   ├── list-skills.ts
+│   ├── prune-musl-packages.ts
 │   ├── release-github.ts
 │   └── tree.ts
 ├── src/
@@ -162,13 +164,22 @@ sports-mcp-server/
 │   │   │   └── mlb-service.ts
 │   │   ├── thesportsdb/
 │   │   │   └── thesportsdb-service.ts
+│   │   ├── date-window.ts
 │   │   ├── fetch-provider-text.ts
 │   │   ├── provider-errors.ts
+│   │   ├── team-resolver.ts
 │   │   └── types.ts
 │   └── index.ts
 ├── tests/
+│   ├── fixtures/
+│   │   ├── college-default-inventories.json
+│   │   ├── college-inventory-ids.json
+│   │   ├── espn-calendar.json
+│   │   ├── README.md
+│   │   └── runtime-probe.cjs
 │   ├── packaging/
-│   │   └── dockerfile.test.ts
+│   │   ├── dockerfile.test.ts
+│   │   └── start-runtime.test.ts
 │   ├── prompts/
 │   ├── resources/
 │   ├── services/
@@ -178,6 +189,7 @@ sports-mcp-server/
 │   │   ├── provider-requests.test.ts
 │   │   └── thesportsdb-service.test.ts
 │   ├── tools/
+│   │   ├── calendar-contract.test.ts
 │   │   ├── formatting.test.ts
 │   │   ├── sports-find-player.tool.test.ts
 │   │   ├── sports-find-team.tool.test.ts
