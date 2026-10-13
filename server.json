@@ -12,18 +12,8 @@
       "registryType": "npm",
       "registryBaseUrl": "https://registry.npmjs.org",
       "identifier": "@cyanheads/sports-mcp-server",
-      "runtimeHint": "bun",
+      "runtimeHint": "npx",
       "version": "0.2.3",
-      "packageArguments": [
-        {
-          "type": "positional",
-          "value": "run"
-        },
-        {
-          "type": "positional",
-          "value": "start:stdio"
-        }
-      ],
       "environmentVariables": [
         {
           "name": "THESPORTSDB_API_KEY",
@@ -48,19 +38,15 @@
       "registryType": "npm",
       "registryBaseUrl": "https://registry.npmjs.org",
       "identifier": "@cyanheads/sports-mcp-server",
-      "runtimeHint": "bun",
+      "runtimeHint": "npx",
       "version": "0.2.3",
-      "packageArguments": [
-        {
-          "type": "positional",
-          "value": "run"
-        },
-        {
-          "type": "positional",
-          "value": "start:http"
-        }
-      ],
       "environmentVariables": [
+        {
+          "name": "MCP_TRANSPORT_TYPE",
+          "description": "Selects the HTTP transport.",
+          "format": "string",
+          "value": "http"
+        },
         {
           "name": "THESPORTSDB_API_KEY",
           "description": "TheSportsDB API key. Defaults to '3' (free public test key). Replace with a paid key for higher rate limits.",

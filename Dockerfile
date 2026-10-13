@@ -7,7 +7,7 @@
 # aborts under QEMU emulation, which multi-arch builds hit on the non-native
 # builder. The produced JS is architecture-independent.
 # ==============================================================================
-FROM --platform=$BUILDPLATFORM oven/bun:1.4.2 AS build
+FROM --platform=$BUILDPLATFORM oven/bun:1.4.3 AS build
 
 WORKDIR /usr/src/app
 
@@ -35,7 +35,7 @@ RUN bun run build
 # The scanner and OTel installer execute JavaScript, so neither runs under QEMU.
 # The final runtime copies only these production dependencies into the Node image.
 # ==============================================================================
-FROM --platform=$BUILDPLATFORM oven/bun:1.4.2 AS deps
+FROM --platform=$BUILDPLATFORM oven/bun:1.4.3 AS deps
 
 WORKDIR /usr/src/app
 
@@ -65,6 +65,9 @@ RUN --mount=type=cache,target=/root/.bun/install/cache \
     if [ "$OTEL_ENABLED" = "true" ]; then \
       bun scripts/install-otel.ts --os="$TARGETOS" --cpu="$(cat .bun-cpu)"; \
     fi
+
+COPY scripts/prune-musl-packages.ts ./scripts/
+RUN bun scripts/prune-musl-packages.ts
 
 # The scanner is needed only while installing dependencies.
 RUN rm -rf node_modules/@socketsecurity/bun-security-scanner
