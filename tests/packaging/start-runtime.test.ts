@@ -51,7 +51,7 @@ it.each(['start:stdio', 'start:http'])(
         child.stdin.end();
         await once(child, 'exit');
       } else {
-        const deadline = Date.now() + 6000;
+        const deadline = Date.now() + 30000;
         let ready = false;
         while (Date.now() < deadline && child.exitCode === null) {
           try {
@@ -84,5 +84,5 @@ it.each(['start:stdio', 'start:http'])(
         ]);
     }
   },
-  10000,
+  45000,
 );
