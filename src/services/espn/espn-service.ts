@@ -471,6 +471,7 @@ export class EspnService {
       )
         verified = false;
 
+      const groupRows: NormalizedStanding[] = [];
       for (let i = 0; i < entries.length; i++) {
         const entry = entries[i] as Record<string, unknown>;
         const team = entry.team as Record<string, unknown> | undefined;
@@ -489,8 +490,9 @@ export class EspnService {
           statMap[String(s.name ?? '')] = String(s.displayValue ?? s.value ?? '');
         }
 
-        standings.push({
-          rank: i + 1,
+        const position = Number(statMap.rank ?? statMap.playoffSeed);
+        groupRows.push({
+          rank: Number.isInteger(position) && position > 0 ? position : null,
           group: c.name != null ? String(c.name) : null,
           team: {
             id: `espn:${String(team?.id ?? '')}`,
@@ -513,6 +515,8 @@ export class EspnService {
           source: 'espn' as const,
         });
       }
+      groupRows.sort((a, b) => (a.rank ?? Infinity) - (b.rank ?? Infinity));
+      standings.push(...groupRows);
       for (const child of (c.children as Record<string, unknown>[] | undefined) ?? [])
         visit(child, servedSeason);
     };

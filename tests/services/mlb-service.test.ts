@@ -11,6 +11,41 @@ vi.stubGlobal('fetch', vi.fn());
 import { MlbService } from '@/services/mlb/mlb-service.js';
 
 describe('MlbService', () => {
+  it('preserves valid division ranks and leaves invalid ranks unknown', async () => {
+    vi.mocked(fetch)
+      .mockReset()
+      .mockImplementation(async (input) =>
+        Response.json(
+          String(input).includes('/standings?')
+            ? {
+                records: [
+                  {
+                    division: { name: 'West' },
+                    teamRecords: ['2', '1', '1', null, '0', '3x', true, ['1'], 1.5].map(
+                      (divisionRank, id) => ({
+                        team: { id },
+                        divisionRank,
+                      }),
+                    ),
+                  },
+                ],
+              }
+            : { teams: [] },
+        ),
+      );
+    const rows = await new MlbService().getStandings('2025', createMockContext());
+    expect(rows.map((s) => [s.team.id, s.rank])).toEqual([
+      ['mlb:1', 1],
+      ['mlb:2', 1],
+      ['mlb:0', 2],
+      ['mlb:3', null],
+      ['mlb:4', null],
+      ['mlb:5', null],
+      ['mlb:6', null],
+      ['mlb:7', null],
+      ['mlb:8', null],
+    ]);
+  });
   const ctx = createMockContext();
   const svc = new MlbService();
   it('hydrates historical division names without a separate lookup', async () => {

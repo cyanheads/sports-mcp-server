@@ -3,8 +3,10 @@
  * @module tests/services/mlb-enrichment.test
  */
 import { JsonRpcErrorCode, McpError, serviceUnavailable } from '@cyanheads/mcp-ts-core/errors';
-import { createMockContext } from '@cyanheads/mcp-ts-core/testing';
+import { createMockContext, runToolContract } from '@cyanheads/mcp-ts-core/testing';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { sportsGetStandings } from '@/mcp-server/tools/definitions/sports-get-standings.tool.js';
+import * as mlbModule from '@/services/mlb/mlb-service.js';
 import { MlbService } from '@/services/mlb/mlb-service.js';
 
 afterEach(() => {
@@ -46,6 +48,24 @@ describe('MLB standings optional abbreviation lookup', () => {
       wins: 90,
       losses: 72,
     });
+  });
+  it('discloses metadata degradation on both callable standings surfaces', async () => {
+    vi.spyOn(mlbModule, 'getMlbService').mockReturnValue(service(serviceUnavailable('secret')));
+    const result = await runToolContract(sportsGetStandings, { league: 'mlb', season: '2025' });
+    expect(result.isError).not.toBe(true);
+    expect(result.structuredContent).toMatchObject({
+      standings: [{ wins: 90 }],
+      unavailableSources: [
+        {
+          source: 'mlbstats',
+          operation: 'standings_team_metadata',
+          reason: 'unavailable',
+          recovery: expect.any(String),
+        },
+      ],
+    });
+    expect(JSON.stringify(result.content)).toContain('standings_team_metadata');
+    expect(JSON.stringify(result)).not.toContain('secret');
   });
 
   it.each([

@@ -7,6 +7,7 @@ import { tool, z } from '@cyanheads/mcp-ts-core';
 import { JsonRpcErrorCode } from '@cyanheads/mcp-ts-core/errors';
 import { getEspnService } from '@/services/espn/espn-service.js';
 import { getMlbService } from '@/services/mlb/mlb-service.js';
+import { UnavailableSources } from '@/services/provider-errors.js';
 import { LEAGUE_ROUTES, type NormalizedStanding } from '@/services/types.js';
 import { inline } from '../formatting.js';
 
@@ -30,11 +31,29 @@ export const sportsGetStandings = tool('sports_get_standings', {
   description:
     'Current standings or league table for a league. Returns team rank, W/L record (or points for ' +
     'soccer/NHL), division or conference, streak, and games behind. Omit season for the current year. ' +
-    'NHL standings use points; soccer uses points-based league tables.',
+    'NHL standings use points; soccer uses points-based league tables. Pages default to 100 rows, capped at 200; continue with nextOffset and the same league and season. Provider ranks preserve ties and are null when unavailable.',
 
   annotations: { readOnlyHint: true, openWorldHint: true },
 
   input: z.object({
+    limit: z
+      .number()
+      .int()
+      .positive()
+      .max(Number.MAX_SAFE_INTEGER)
+      .optional()
+      .describe(
+        'Standings rows per page, default 100; values above 200 are clamped and disclosed.',
+      ),
+    offset: z
+      .number()
+      .int()
+      .nonnegative()
+      .max(Number.MAX_SAFE_INTEGER)
+      .optional()
+      .describe(
+        'Zero-based standings offset, default 0. Continue with nextOffset and the same league and season.',
+      ),
     league: LEAGUE_ENUM.describe(
       'League identifier. Supported: nfl, nba, mlb, nhl, epl, mls, laliga, bundesliga, seriea, ligue1, ucl, ncaaf, ncaab.',
     ),
@@ -50,7 +69,10 @@ export const sportsGetStandings = tool('sports_get_standings', {
       .array(
         z
           .object({
-            rank: z.number().describe('Team rank within their group (1-based).'),
+            rank: z
+              .number()
+              .nullable()
+              .describe('Provider rank within the group (1-based), null when unavailable.'),
             group: z
               .string()
               .nullable()
@@ -85,19 +107,40 @@ export const sportsGetStandings = tool('sports_get_standings', {
           })
           .describe('A single team standing entry.'),
       )
-      .describe('Standings entries, ordered as returned by the source.'),
+      .describe(
+        'Provider groups in source order; ranked rows sorted by group position, stable ties, unknown ranks last.',
+      ),
     league: z.string().describe('The league queried.'),
     season: z.string().nullable().describe('The season queried, or null if current.'),
     source: z.enum(['espn', 'mlbstats']).describe('Primary data source used.'),
   }),
 
   enrichment: {
+    availableStandings: z.number().describe('Total standings rows in the acquired league season.'),
+    totalReturned: z.number().describe('Standings rows returned on this page.'),
+    effectiveLimit: z.number().describe('Applied page limit, at most 200.'),
+    offset: z.number().describe('Applied zero-based standings offset.'),
+    truncated: z.boolean().describe('Whether standings rows remain after this page.'),
+    nextOffset: z
+      .number()
+      .optional()
+      .describe('Next standings offset; repeat the same league and season.'),
+    unavailableSources: UnavailableSources,
     notice: z
       .string()
       .optional()
       .describe(
         'Informational note, e.g. "Season not currently active" when standings are unavailable during the off-season.',
       ),
+  },
+
+  enrichmentTrailer: {
+    unavailableSources: {
+      render: (sources) =>
+        sources
+          ?.map((s) => `${s.source} / ${s.operation}: ${s.reason}. ${s.recovery}`)
+          .join('\n') ?? '',
+    },
   },
 
   errors: [
@@ -130,7 +173,30 @@ export const sportsGetStandings = tool('sports_get_standings', {
       source = 'espn';
     }
 
-    if (standings.length === 0) {
+    const availableStandings = standings.length;
+    const effectiveLimit = Math.min(input.limit ?? 100, 200);
+    const offset = input.offset ?? 0;
+    const page = standings.slice(offset, offset + effectiveLimit);
+    const truncated = offset + page.length < availableStandings;
+    ctx.enrich({
+      availableStandings,
+      totalReturned: page.length,
+      effectiveLimit,
+      offset,
+      truncated,
+      ...(truncated ? { nextOffset: offset + page.length } : {}),
+    });
+    const notices = [
+      ...((input.limit ?? 100) > effectiveLimit
+        ? [`Requested limit ${input.limit} clamped to 200.`]
+        : []),
+      ...(availableStandings && !page.length
+        ? [`Offset ${offset} is past the ${availableStandings} available standings.`]
+        : []),
+      ...(truncated ? ['Continue with nextOffset and the same league and season.'] : []),
+    ];
+
+    if (availableStandings === 0) {
       // When a season was explicitly requested and not found, that is a hard error.
       // When no season was provided, the league is likely in its off-season — return
       // empty standings with a notice rather than throwing.
@@ -141,19 +207,15 @@ export const sportsGetStandings = tool('sports_get_standings', {
           { ...ctx.recoveryFor('season_not_found') },
         );
       }
-      ctx.enrich.notice(
+      notices.unshift(
         'Season not currently active — standings are unavailable during the off-season.',
       );
-      return {
-        standings: [],
-        league: input.league,
-        season: null,
-        source,
-      };
     }
 
+    if (notices.length) ctx.enrich.notice(notices.join(' '));
+
     return {
-      standings,
+      standings: page,
       league: input.league,
       season: input.season ?? null,
       source,
@@ -178,7 +240,7 @@ export const sportsGetStandings = tool('sports_get_standings', {
       const divRank = s.divisionRank ? ` | divRank:${s.divisionRank}` : '';
 
       lines.push(
-        inline`${s.rank}. **${s.team.abbreviation}** (${s.team.name}) [${s.team.id}] — ${record}${group}${pct}${streak}${gb}${divRank}`,
+        inline`${s.rank ?? 'Unknown'}. **${s.team.abbreviation}** (${s.team.name}) [${s.team.id}] — ${record}${group}${pct}${streak}${gb}${divRank}`,
       );
     }
 

@@ -101,6 +101,71 @@ describe('sportsFindTeam', () => {
     expect(result.query).toBe('Arsenal');
   });
 
+  it.each(['espn', 'mlb-scoped', 'mlb-unscoped'])(
+    'merges same-ID metadata before name dedup: %s',
+    async (path) => {
+      const retained = makeTeam({
+        league: 'MLB',
+        espnId: path === 'espn' ? '359' : null,
+        mlbId: path === 'espn' ? null : 136,
+        logoUrl: null,
+        venueName: null,
+      });
+      const candidate = makeTeam({
+        id: path === 'espn' ? 'espn:359' : 'mlb:136',
+        espnId: path === 'espn' ? '359' : null,
+        tsdbId: null,
+        displayName: 'Arsenal Alternate',
+        logoUrl: 'badge',
+        venueName: 'Park',
+        source: path === 'espn' ? 'espn' : 'mlbstats',
+        mlbId: path === 'espn' ? null : 136,
+      });
+      const unrelated = makeTeam({
+        id: 'tsdb:other',
+        espnId: null,
+        mlbId: null,
+        tsdbId: 'other',
+        displayName: 'Arsenal Other',
+        league: 'MLB',
+      });
+      mockTsdbSvc.searchTeams.mockResolvedValue([retained, unrelated]);
+      mockEspnSvc.getTeams.mockResolvedValue(path === 'espn' ? [candidate] : []);
+      mockMlbSvc.getTeams.mockResolvedValue(path === 'espn' ? [] : [candidate]);
+      const input = {
+        query: 'Arsenal',
+        ...(path === 'mlb-unscoped' ? {} : { league: 'mlb' as const }),
+      };
+      const before = structuredClone([retained, candidate, unrelated]);
+      const result = await runToolContract(sportsFindTeam, input);
+      expect(result.structuredContent).toMatchObject({
+        teams: [
+          {
+            id: 'tsdb:133604',
+            displayName: 'Arsenal',
+            logoUrl: 'badge',
+            venueName: 'Park',
+            tsdbId: '133604',
+            espnId: retained.espnId,
+            mlbId: retained.mlbId,
+          },
+          { id: 'tsdb:other', displayName: 'Arsenal Other' },
+        ],
+        totalFound: 2,
+      });
+      expect(JSON.stringify(result.content)).toContain('Logo: badge');
+      expect([retained, candidate, unrelated]).toEqual(before);
+      expect((await runToolContract(sportsFindTeam, input)).structuredContent).toEqual(
+        result.structuredContent,
+      );
+      retained.logoUrl = 'retained badge';
+      retained.venueName = 'retained venue';
+      expect((await runToolContract(sportsFindTeam, input)).structuredContent).toMatchObject({
+        teams: [{ logoUrl: 'retained badge', venueName: 'retained venue' }, { id: 'tsdb:other' }],
+      });
+    },
+  );
+
   it('throws no_match with recovery hint when nothing found across all sources', async () => {
     mockTsdbSvc.searchTeams.mockResolvedValue([]);
     mockMlbSvc.getTeams.mockResolvedValue([]);
@@ -362,6 +427,30 @@ describe('sportsFindTeam', () => {
       expect(result.teams).toHaveLength(1);
     });
 
+    it('discloses the optional outage on both surfaces alongside free-key guidance', async () => {
+      const input = prepare(serviceUnavailable('secret provider body'));
+      const result = await runToolContract(sportsFindTeam, input);
+      expect(result.structuredContent).toMatchObject({
+        unavailableSources: [
+          {
+            source: path === 'espn-scoped' ? 'espn' : 'mlbstats',
+            operation: 'team_list',
+            reason: 'unavailable',
+            recovery: expect.any(String),
+          },
+        ],
+        notice: expect.stringContaining('free-key'),
+      });
+      expect(JSON.stringify(result.content)).toContain('team_list: unavailable');
+      expect(JSON.stringify(result)).not.toContain('secret provider body');
+      mockTsdbSvc.searchTeams.mockResolvedValue([]);
+      const empty = await runToolContract(sportsFindTeam, input);
+      expect(empty.structuredContent).toMatchObject({
+        error: { data: { reason: 'sources_unavailable', recovery: { hint: expect.any(String) } } },
+      });
+      expect(JSON.stringify(empty.content)).toContain('Recovery:');
+    });
+
     it.each([
       JsonRpcErrorCode.InvalidParams,
       JsonRpcErrorCode.ValidationError,
@@ -386,5 +475,12 @@ describe('sportsFindTeam', () => {
         ),
       ).rejects.toBe(error);
     });
+  });
+  it('reports simultaneous optional outages', async () => {
+    mockTsdbSvc.searchTeams.mockResolvedValue([makeTeam({ league: 'MLB' })]);
+    mockEspnSvc.getTeams.mockRejectedValue(serviceUnavailable('ESPN'));
+    mockMlbSvc.getTeams.mockRejectedValue(serviceUnavailable('MLB'));
+    const result = await runToolContract(sportsFindTeam, { query: 'Arsenal', league: 'mlb' });
+    expect(result.structuredContent.unavailableSources).toHaveLength(2);
   });
 });

@@ -97,7 +97,7 @@ export interface NormalizedStanding {
   losses: number;
   overtimeLosses: number | null;
   points: number | null;
-  rank: number;
+  rank: number | null;
   source: 'espn' | 'mlbstats';
   streak: string | null;
   team: { id: string; name: string; abbreviation: string };

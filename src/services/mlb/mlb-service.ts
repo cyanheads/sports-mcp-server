@@ -14,7 +14,7 @@ import {
 import type { StorageService } from '@cyanheads/mcp-ts-core/storage';
 import { withRetry } from '@cyanheads/mcp-ts-core/utils';
 import { fetchProviderText } from '../fetch-provider-text.js';
-import { rethrowTerminalProviderError } from '../provider-errors.js';
+import { rethrowTerminalProviderError, unavailableSource } from '../provider-errors.js';
 import type { GameDetail, NormalizedGame, NormalizedStanding, NormalizedTeam } from '../types.js';
 import { normalizeMlbGameDetail } from './mlb-game-detail.js';
 
@@ -227,6 +227,9 @@ export class MlbService {
       this.fetchJson<{ teams?: unknown[] }>(`${MLB_BASE}/teams?sportId=1&season=${yr}`, ctx).catch(
         (error: unknown) => {
           rethrowTerminalProviderError(error, ctx);
+          ctx.enrich({
+            unavailableSources: [unavailableSource('mlbstats', 'standings_team_metadata')],
+          });
           return { teams: [] as unknown[] };
         },
       ),
@@ -246,16 +249,21 @@ export class MlbService {
     for (const rec of records) {
       const record = rec as Record<string, unknown>;
       const teamRecords = (record.teamRecords as unknown[]) ?? [];
+      const groupRows: NormalizedStanding[] = [];
 
       for (const tr of teamRecords) {
         const t = tr as Record<string, unknown>;
         const team = t.team as Record<string, unknown> | undefined;
         const teamId = String(team?.id ?? '');
 
-        standings.push({
+        const position =
+          typeof t.divisionRank === 'string' || typeof t.divisionRank === 'number'
+            ? Number(t.divisionRank)
+            : Number.NaN;
+        groupRows.push({
           group: (record.division as { name?: string } | undefined)?.name ?? null,
           overtimeLosses: null,
-          rank: typeof t.divisionRank === 'string' ? parseInt(t.divisionRank, 10) || 0 : 0,
+          rank: Number.isInteger(position) && position > 0 ? position : null,
           team: {
             id: `mlb:${teamId}`,
             name: String(team?.name ?? ''),
@@ -276,6 +284,8 @@ export class MlbService {
           source: 'mlbstats' as const,
         });
       }
+      groupRows.sort((a, b) => (a.rank ?? Infinity) - (b.rank ?? Infinity));
+      standings.push(...groupRows);
     }
     return standings;
   }

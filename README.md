@@ -23,7 +23,7 @@
 
 ## Overview
 
-Live and historical sports data from ESPN, MLB StatsAPI, and TheSportsDB. Look up teams and players, check scores, schedules, and standings across NFL, NBA, MLB, NHL, and major soccer leagues from any MCP client. College basketball covers men's Division I; college football scoreboards cover FBS, while team lookup uses ESPN's broader inventory. Runs as a stdio process or a local Streamable HTTP server.
+Live and historical sports data from ESPN, MLB StatsAPI, and TheSportsDB. Check scores, schedules, and standings, and look up teams and players across the NFL, NBA, MLB, NHL, major soccer leagues, and college football and basketball.
 
 ### Tools
 
@@ -43,7 +43,8 @@ Live and historical sports data from ESPN, MLB StatsAPI, and TheSportsDB. Look u
 ### `sports_find_team` <sub>tool</sub>
 
 - Free-text `query` (max 200 characters) with an optional `league` filter
-- Returns team metadata and merged `espnId`/`mlbId`/`tsdbId` cross-references; `no_match` when no provider finds a team
+- Returns team metadata and merged `espnId`/`mlbId`/`tsdbId` cross-references. Matching provider IDs merge missing badges and venues before name deduplication; current and legacy TheSportsDB badge fields are supported
+- Failed optional ESPN/MLB contributions appear in `unavailableSources` with source, operation, availability reason, and retry guidance on both surfaces. Useful matches survive; empty degraded searches return `sources_unavailable`, while fully successful empty searches return `no_match`
 - `totalFound` counts returned records after deduplication. Free-key TheSportsDB contributions include a notice that search results may be incomplete; the limit does not apply to ESPN or MLB contributions
 
 ---
@@ -60,6 +61,7 @@ Live and historical sports data from ESPN, MLB StatsAPI, and TheSportsDB. Look u
 
 - `league` required; `date` (YYYY-MM-DD) defaults to today's US Eastern calendar day, including daylight saving time; optional `team_name` filters games
 - Returns home/away teams, score, status, period or clock, and UTC start time. Empty results retain `reason` and add typed `emptyReason` (`no_games` or `no_team_matches`) and `notice` on both response surfaces
+- `limit` defaults to 100 and caps at 200; nonnegative `offset` defaults to 0. Pages follow filtering and stable start-time/ID ordering. Both surfaces disclose `availableGames`, `totalReturned`, `effectiveLimit`, `offset`, `truncated`, and `nextOffset` when more rows remain. Continue with the same date and team filter; `sports_get_schedule` also supports date windows. Past-end pages succeed with the true total and an exhausted-page notice
 
 ---
 
@@ -76,7 +78,8 @@ Live and historical sports data from ESPN, MLB StatsAPI, and TheSportsDB. Look u
 ### `sports_get_game` <sub>tool</sub>
 
 - Required `league` and source-prefixed numeric `game_id` from scores, schedules, or team detail. ESPN IDs use the supplied league; `mlb:` IDs require `league: "mlb"`
-- Returns established game metadata plus `periodScores`, `teamStats`, `leaders`, and `scoringPlays`. Provider statistic names, labels, and display values are preserved; missing values remain null, including unplayed innings. Athlete IDs in game detail belong to ESPN or MLB and are not TheSportsDB player-lookup IDs
+- Returns established game metadata plus `periodScores`, `teamStats`, `leaders`, and `scoringPlays`. Provider statistic names and labels are preserved; missing values remain null, including unplayed innings. Athlete IDs in game detail belong to ESPN or MLB and are not TheSportsDB player-lookup IDs
+- MLB batting AVG/OBP/SLG/OPS and pitching ERA/WHIP are calculated from game counts under their existing statistic names. Pitching rates use outs; missing operands or zero denominators yield null. Other game-scoped displays remain intact
 - `offset` defaults to 0; `limit` defaults to 20 and caps at 50, with larger limits clipped and disclosed. Both response surfaces expose `totalCount`, `returnedCount`, zero-based `servedFrom`/`servedTo`, `effectiveLimit`, and `nextOffset`. Continue with the same league and game ID. Pages reacquire the game; live events can change between calls
 - Scheduled games return metadata and empty played-stat sections; no season leaders, full player boxscores, or raw play-by-play. Missing/wrong-league events return `game_not_found`; provider outages and malformed responses retain provider failures
 
@@ -86,6 +89,9 @@ Live and historical sports data from ESPN, MLB StatsAPI, and TheSportsDB. Look u
 
 - `league` required; optional `season` (4-digit year) — omit for the current season
 - Returns rank and its upstream group (conference, table, or MLB division), wins, losses, ties, NHL overtime losses, soccer/NHL points, winning percentage, division rank, streak, and games behind. Missing or inapplicable group/OTL values remain null; numeric zero is preserved
+- Rank uses the provider's unsplit group position, null when unavailable. Within each group, ranked rows sort by position with stable ties, followed by unranked rows in source order
+- `limit` defaults to 100 and caps at 200; nonnegative `offset` defaults to 0. Both surfaces disclose `availableStandings`, `totalReturned`, `effectiveLimit`, `offset`, `truncated`, and `nextOffset` when more rows remain. Continue with the same league and season; group identity and rank survive mid-group pages. Past-end offsets return empty pages with the true total, rather than a missing-season error
+- MLB standings retain available metadata when the auxiliary team lookup fails, disclosing `standings_team_metadata` in `unavailableSources`; absent fields in a successful response are not reported as an outage
 - ESPN uses the provider's default table. An explicit season must match served root/group season metadata; missing or mismatched metadata and empty explicit seasons return `season_not_found`. Omitted seasons retain `season: null`, with the existing notice when genuinely empty
 
 ---
@@ -113,7 +119,7 @@ Sports-specific:
 - Three keyless sources — ESPN site API, MLB StatsAPI, and TheSportsDB (free tier key `3`) — no required API credentials
 - Internal league routing table sends each query to the best source per sport; callers never reference an upstream API directly
 - Normalized output types across all sources — `NormalizedGame`, `NormalizedTeam`, `NormalizedPlayer`, `NormalizedStanding` — with source provenance on every record
-- Cross-source team IDs merged onto one canonical record by `sports_find_team`, deduplicated by display name
+- Cross-source team IDs merged onto one canonical record by `sports_find_team`, deduplicated by matching provider IDs or display name
 - Graceful off-season handling — empty standings return an enrichment notice rather than an error; empty scoreboards return `games: []` with a `reason` string
 - Upstream operations use 10-second attempts and a 30-second total retry budget, including body reads and backoff, with up to four attempts for fast transient failures. Composite tools can make several such operations
 
@@ -122,9 +128,9 @@ Agent-friendly output:
 - Source provenance on every record — `source: 'espn' | 'mlbstats' | 'thesportsdb'` — so agents can reason about data authority
 - Typed empty-score notices alongside the compatible `reason` field, plus schedule window and continuation metadata on both response surfaces
 - Cross-source IDs surfaced by `sports_find_team` — `espnId`, `mlbId`, `tsdbId` — identify the same team across providers; team-scoped tools resolve `team_name` independently
-- Typed error reasons (`no_match`, `team_not_found`, `ambiguous_team`, `player_not_found`, `season_not_found`, `game_not_found`, `incompatible_game_source`) each carrying an actionable recovery hint
+- Typed error reasons (`no_match`, `sources_unavailable`, `team_not_found`, `ambiguous_team`, `player_not_found`, `season_not_found`, `game_not_found`, `incompatible_game_source`) each carrying an actionable recovery hint
 - Upstream HTTP errors retain their status and bounded diagnostics; ESPN scoreboard input rejections include date/bounds guidance. Optional-source outages degrade gracefully, while input rejections and cancellation propagate
-- Formatted provider fields stay on their authored lines, and full player biographies appear in text fences; structured values remain verbatim. Provider content is data, never instructions
+- Formatted provider fields stay on their authored lines with HTML and inline Markdown escaped for literal display. Full player biographies retain their complete text inside collision-safe fences; structured values remain verbatim. Provider content is data, never instructions
 
 ## Getting started
 

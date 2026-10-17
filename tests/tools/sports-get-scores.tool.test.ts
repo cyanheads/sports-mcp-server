@@ -3,7 +3,7 @@
  * @module tests/tools/sports-get-scores.tool.test
  */
 
-import { createMockContext } from '@cyanheads/mcp-ts-core/testing';
+import { createMockContext, runToolContract } from '@cyanheads/mcp-ts-core/testing';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { NormalizedGame } from '@/services/types.js';
 
@@ -60,6 +60,58 @@ describe('sportsGetScores', () => {
     expect(result.date).toBe('2026-06-04');
     expect(mockEspnSvc.getScoreboard).toHaveBeenCalledWith('football', 'nfl', '2026-06-04', ctx);
   });
+  it('pages the filtered ordered slate and distinguishes exhausted pages', async () => {
+    const games = Array.from({ length: 205 }, (_, i) =>
+      makeGame({
+        id: `espn:${String(i < 100 ? 200 + i : i - 100).padStart(3, '0')}`,
+        startTimeUtc: i < 100 ? '2026-06-04T18:00:00Z' : '2026-06-04T19:00:00Z',
+      }),
+    );
+    const source = [...games].reverse();
+    mockEspnSvc.getScoreboard.mockResolvedValue(source);
+    const before = structuredClone(source);
+    const ids: string[] = [];
+    for (const offset of [0, 100, 200, 205]) {
+      const result = await runToolContract(sportsGetScores, {
+        league: 'nfl',
+        date: '2026-06-04',
+        team_name: 'SEA',
+        offset,
+      });
+      const rows = result.structuredContent.games as NormalizedGame[];
+      expect(result.structuredContent).toMatchObject({
+        availableGames: 205,
+        totalReturned: Math.min(100, 205 - offset),
+        offset,
+        effectiveLimit: 100,
+        truncated: offset < 200,
+      });
+      expect(JSON.stringify(result.content)).toContain('availableGames');
+      if (offset < 200) expect(result.structuredContent.nextOffset).toBe(offset + 100);
+      else expect(result.structuredContent).not.toHaveProperty('nextOffset');
+      if (offset === 205) {
+        expect(rows).toEqual([]);
+        expect(result.structuredContent).not.toHaveProperty('emptyReason');
+        expect(JSON.stringify(result.content)).toContain('past');
+      }
+      ids.push(...rows.map((g) => g.id));
+    }
+    expect(ids).toEqual(games.map((g) => g.id));
+    const capped = await runToolContract(sportsGetScores, { league: 'nfl', limit: 999 });
+    expect(capped.structuredContent).toMatchObject({ effectiveLimit: 200, totalReturned: 200 });
+    expect(JSON.stringify(capped.content)).toContain('clamped');
+    expect(source).toEqual(before);
+  });
+
+  it.each([{ limit: 0 }, { offset: -1 }, { limit: 1.5 }])(
+    'rejects invalid paging %j',
+    async (paging) => {
+      expect((await runToolContract(sportsGetScores, { league: 'nfl', ...paging })).isError).toBe(
+        true,
+      );
+      expect(mockEspnSvc.getScoreboard).not.toHaveBeenCalled();
+    },
+  );
 
   it('routes MLB to mlb service', async () => {
     const game = makeGame({ id: 'mlb:99', source: 'mlbstats' });

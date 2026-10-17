@@ -7,6 +7,7 @@ import { JsonRpcErrorCode } from '@cyanheads/mcp-ts-core/errors';
 import { createMockContext } from '@cyanheads/mcp-ts-core/testing';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { EspnService } from '@/services/espn/espn-service.js';
+import { normalizeMlbGameDetail } from '@/services/mlb/mlb-game-detail.js';
 import { MlbService } from '@/services/mlb/mlb-service.js';
 
 function capture(name: string): { body: string; status: number } {
@@ -46,6 +47,90 @@ describe('game record characterization', () => {
 });
 
 describe('game detail', () => {
+  it('derives game rates from counts, keeping faithful game displays', () => {
+    const raw = JSON.parse(capture('mlb-board-feed').body);
+    raw.liveData.boxscore.teams.away.teamStats = {
+      batting: {
+        hits: 5,
+        atBats: 31,
+        baseOnBalls: 3,
+        hitByPitch: 0,
+        sacFlies: 1,
+        totalBases: 8,
+        avg: '.999',
+        obp: '.999',
+        slg: '.999',
+        ops: '9.999',
+        toString: 'provider text',
+      },
+      pitching: {
+        hits: 9,
+        baseOnBalls: 0,
+        earnedRuns: 1,
+        outs: 25,
+        inningsPitched: '8.1',
+        era: '9.99',
+        whip: '9.99',
+        strikePercentage: '.600',
+      },
+    };
+    const stats = Object.fromEntries(
+      normalizeMlbGameDetail(raw, '849809').teamStats[0]!.statistics.map((s) => [s.name, s.value]),
+    );
+    expect(stats).toMatchObject({
+      'batting.avg': '.161',
+      'batting.obp': '.229',
+      'batting.slg': '.258',
+      'batting.ops': '.487',
+      'batting.toString': 'provider text',
+      'pitching.era': '1.08',
+      'pitching.whip': '1.08',
+      'pitching.strikePercentage': '.600',
+    });
+  });
+
+  it('combines unrounded OBP and SLG for OPS', () => {
+    const raw = JSON.parse(capture('mlb-board-feed').body);
+    raw.liveData.boxscore.teams.away.teamStats = {
+      batting: {
+        hits: 1,
+        atBats: 3,
+        baseOnBalls: 0,
+        hitByPitch: 0,
+        sacFlies: 0,
+        totalBases: 1,
+        obp: '.999',
+        slg: '.999',
+        ops: '9.999',
+      },
+    };
+    expect(normalizeMlbGameDetail(raw, '849809').teamStats[0]!.statistics).toEqual([
+      { name: 'batting.hits', label: 'hits', value: '1' },
+      { name: 'batting.atBats', label: 'atBats', value: '3' },
+      { name: 'batting.baseOnBalls', label: 'baseOnBalls', value: '0' },
+      { name: 'batting.hitByPitch', label: 'hitByPitch', value: '0' },
+      { name: 'batting.sacFlies', label: 'sacFlies', value: '0' },
+      { name: 'batting.totalBases', label: 'totalBases', value: '1' },
+      { name: 'batting.obp', label: 'obp', value: '.333' },
+      { name: 'batting.slg', label: 'slg', value: '.333' },
+      { name: 'batting.ops', label: 'ops', value: '.667' },
+    ]);
+  });
+
+  it.each([
+    [{ hits: 0, atBats: 1 }, '.000'],
+    [{ hits: 0, atBats: 0 }, null],
+    [{ hits: 1 }, null],
+    [{ hits: '', atBats: 3 }, null],
+  ])('preserves unknown and zero batting rates %j', (counts, expected) => {
+    const raw = JSON.parse(capture('mlb-board-feed').body);
+    raw.liveData.boxscore.teams.away.teamStats = { batting: { ...counts, avg: '.999' } };
+    expect(
+      normalizeMlbGameDetail(raw, '849809').teamStats[0]!.statistics.find(
+        (s) => s.name === 'batting.avg',
+      )?.value,
+    ).toBe(expected);
+  });
   it.each(['espn', 'mlb'])(
     'retries a genuine %s outage through the existing transport',
     async (source) => {

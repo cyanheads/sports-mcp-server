@@ -97,7 +97,9 @@ export const sportsGetGame = tool('sports_get_game', {
                     value: z
                       .string()
                       .nullable()
-                      .describe('Provider display value, preserving zero; null if missing.'),
+                      .describe(
+                        'Game display value, preserving zero; MLB AVG/OBP/SLG/OPS/ERA/WHIP derive from game counts. Null when operands are unavailable.',
+                      ),
                   })
                   .describe('One provider statistic.'),
               )

@@ -227,6 +227,32 @@ describe('EspnService team metadata and active rosters', () => {
 });
 
 describe('EspnService standings', () => {
+  it('uses unsplit group seeds with stable ties and unknown positions last through nested groups', async () => {
+    const rows = [9, 1, 1, null, 0, 2.5].map((rank, index) => ({
+      team: { id: String(index), displayName: `Team ${index}` },
+      stats: [
+        { name: 'playoffSeed', type: 'playoffseed', value: rank },
+        { name: 'playoffSeed', type: 'homerecord_playoffseed', value: 99 },
+      ],
+    }));
+    stubFetch({
+      children: [{ name: 'Parent', children: [{ name: 'Group', standings: { entries: rows } }] }],
+    });
+    const result = await new EspnService().getStandings(
+      'basketball',
+      'mens-college-basketball',
+      null,
+      createMockContext(),
+    );
+    expect(result.map((s) => [s.team.id, s.rank, s.group])).toEqual([
+      ['espn:1', 1, 'Group'],
+      ['espn:2', 1, 'Group'],
+      ['espn:0', 9, 'Group'],
+      ['espn:3', null, 'Group'],
+      ['espn:4', null, 'Group'],
+      ['espn:5', null, 'Group'],
+    ]);
+  });
   const svc = new EspnService();
   const entry = {
     team: { id: '1', displayName: 'Team', abbreviation: 'T' },

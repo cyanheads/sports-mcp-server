@@ -136,7 +136,11 @@ export class TheSportsDbService {
       displayName: String(t.strTeam ?? ''),
       league: String(t.strLeague ?? ''),
       logoUrl:
-        t.strTeamBadge != null && String(t.strTeamBadge) !== '' ? String(t.strTeamBadge) : null,
+        t.strBadge != null && String(t.strBadge) !== ''
+          ? String(t.strBadge)
+          : t.strTeamBadge != null && String(t.strTeamBadge) !== ''
+            ? String(t.strTeamBadge)
+            : null,
       venueId: t.idVenue != null ? String(t.idVenue) : null,
       venueName: t.strStadium != null && String(t.strStadium) !== '' ? String(t.strStadium) : null,
       source: 'thesportsdb' as const,

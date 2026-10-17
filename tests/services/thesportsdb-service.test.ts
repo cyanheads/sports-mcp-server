@@ -9,6 +9,17 @@ import { TheSportsDbService } from '@/services/thesportsdb/thesportsdb-service.j
 
 describe('TheSportsDbService', () => {
   it.each([
+    [{ strBadge: 'current', strTeamBadge: 'legacy' }, 'current'],
+    [{ strBadge: '', strTeamBadge: 'legacy' }, 'legacy'],
+    [{ strTeamBadge: 'legacy' }, 'legacy'],
+    [{ strBadge: '', strTeamBadge: '' }, null],
+  ])('preserves current and legacy badges %j', async (fields, logoUrl) => {
+    vi.mocked(fetch).mockResolvedValueOnce(Response.json({ teams: [{ idTeam: '1', ...fields }] }));
+    await expect(
+      new TheSportsDbService().lookupTeam('1', createMockContext()),
+    ).resolves.toMatchObject({ logoUrl });
+  });
+  it.each([
     ['39832', '39832'],
     ['', null],
     ['0', null],

@@ -38,6 +38,20 @@ const text = (result: Awaited<ReturnType<typeof runToolContract>>) =>
     .join('\n');
 
 describe('sports_get_game', () => {
+  it('shows game-derived MLB rates on both callable surfaces', async () => {
+    const raw = JSON.parse(capture('mlb-board-feed').body);
+    raw.liveData.boxscore.teams.away.teamStats.batting = { hits: 5, atBats: 31, avg: '.258' };
+    raw.liveData.boxscore.teams.home.teamStats.pitching = { earnedRuns: 1, outs: 27, era: '3.10' };
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => Response.json(raw)),
+    );
+    const result = await runToolContract(sportsGetGame, { league: 'mlb', game_id: 'mlb:849809' });
+    expect(result.isError).not.toBe(true);
+    expect(JSON.stringify(result.structuredContent)).toContain('.161');
+    expect(text(result)).toContain('batting.avg (avg): .161');
+    expect(text(result)).toContain('pitching.era (era): 1.00');
+  });
   it('keeps sparse sections and missing scores honest on both surfaces', async () => {
     const raw = JSON.parse(capture('epl-summary').body);
     delete raw.boxscore;

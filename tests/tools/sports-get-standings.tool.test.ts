@@ -60,6 +60,59 @@ describe('sportsGetStandings', () => {
     expect(result.source).toBe('espn');
     expect(mockEspnSvc.getStandings).toHaveBeenCalledWith('football', 'nfl', null, ctx);
   });
+  it('preserves unknown rank on both callable surfaces', async () => {
+    mockEspnSvc.getStandings.mockResolvedValue([makeStanding({ rank: null, group: 'Group' })]);
+    const result = await runToolContract(sportsGetStandings, { league: 'nfl' });
+    expect(result.isError).not.toBe(true);
+    expect(result.structuredContent).toMatchObject({ standings: [{ rank: null, group: 'Group' }] });
+    expect(JSON.stringify(result.content)).toContain('Unknown.');
+  });
+  it('pages ordered standings without losing mid-group identity or rank', async () => {
+    const standings = Array.from({ length: 205 }, (_, i) =>
+      makeStanding({
+        rank: (i % 103) + 1,
+        group: i < 103 ? 'A' : 'B',
+        team: { id: `espn:${i}`, name: `Team ${i}`, abbreviation: `T${i}` },
+      }),
+    );
+    mockEspnSvc.getStandings.mockResolvedValue(standings);
+    const combined: NormalizedStanding[] = [];
+    for (const offset of [0, 100, 200, 205]) {
+      const result = await runToolContract(sportsGetStandings, {
+        league: 'ncaab',
+        season: '2026',
+        offset,
+      });
+      expect(result.isError).not.toBe(true);
+      const rows = result.structuredContent.standings as NormalizedStanding[];
+      expect(result.structuredContent).toMatchObject({
+        availableStandings: 205,
+        totalReturned: Math.min(100, 205 - offset),
+        effectiveLimit: 100,
+        offset,
+        truncated: offset < 200,
+      });
+      expect(JSON.stringify(result.content)).toContain('availableStandings');
+      if (offset < 200) expect(result.structuredContent.nextOffset).toBe(offset + 100);
+      else expect(result.structuredContent).not.toHaveProperty('nextOffset');
+      if (offset === 100) expect(rows[0]).toMatchObject({ rank: 101, group: 'A' });
+      if (offset === 205) expect(JSON.stringify(result.content)).toContain('past');
+      combined.push(...rows);
+    }
+    expect(combined).toEqual(standings);
+    const capped = await runToolContract(sportsGetStandings, { league: 'ncaab', limit: 999 });
+    expect(capped.structuredContent).toMatchObject({ effectiveLimit: 200, totalReturned: 200 });
+    expect(JSON.stringify(capped.content)).toContain('clamped');
+  });
+  it.each([{ limit: 0 }, { offset: -1 }, { limit: 1.5 }])(
+    'rejects invalid paging %j',
+    async (paging) => {
+      expect(
+        (await runToolContract(sportsGetStandings, { league: 'nfl', ...paging })).isError,
+      ).toBe(true);
+      expect(mockEspnSvc.getStandings).not.toHaveBeenCalled();
+    },
+  );
   it('delivers ranking groups and zero NHL overtime losses through both surfaces', async () => {
     mockEspnSvc.getStandings.mockResolvedValue([
       makeStanding({ group: 'Eastern Conference', overtimeLosses: 0, points: 0, ties: 0 }),

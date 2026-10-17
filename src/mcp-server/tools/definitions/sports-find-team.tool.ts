@@ -8,7 +8,11 @@ import { JsonRpcErrorCode } from '@cyanheads/mcp-ts-core/errors';
 import { getServerConfig } from '@/config/server-config.js';
 import { getEspnService } from '@/services/espn/espn-service.js';
 import { getMlbService } from '@/services/mlb/mlb-service.js';
-import { rethrowTerminalProviderError } from '@/services/provider-errors.js';
+import {
+  rethrowTerminalProviderError,
+  UnavailableSources,
+  unavailableSource,
+} from '@/services/provider-errors.js';
 import { getTheSportsDbService } from '@/services/thesportsdb/thesportsdb-service.js';
 import { LEAGUE_ROUTES, type NormalizedTeam } from '@/services/types.js';
 import { inline } from '../formatting.js';
@@ -89,6 +93,7 @@ export const sportsFindTeam = tool('sports_find_team', {
   }),
 
   enrichment: {
+    unavailableSources: UnavailableSources,
     notice: z
       .string()
       .optional()
@@ -97,7 +102,22 @@ export const sportsFindTeam = tool('sports_find_team', {
       ),
   },
 
+  enrichmentTrailer: {
+    unavailableSources: {
+      render: (sources) =>
+        sources
+          ?.map((s) => `${s.source} / ${s.operation}: ${s.reason}. ${s.recovery}`)
+          .join('\n') ?? '',
+    },
+  },
+
   errors: [
+    {
+      reason: 'sources_unavailable',
+      code: JsonRpcErrorCode.ServiceUnavailable,
+      when: 'No matches were returned and an optional provider lookup failed, so absence cannot be established.',
+      recovery: 'Retry the same search later when the unavailable provider can contribute.',
+    },
     {
       reason: 'no_match',
       code: JsonRpcErrorCode.NotFound,
@@ -111,6 +131,7 @@ export const sportsFindTeam = tool('sports_find_team', {
     const q = input.query.trim().toLowerCase();
 
     const results: NormalizedTeam[] = [];
+    const unavailableSources: Array<ReturnType<typeof unavailableSource>> = [];
 
     // 1. TheSportsDB search (multi-sport, fuzzy)
     const tsdbTeams = await getTheSportsDbService().searchTeams(input.query, ctx);
@@ -145,13 +166,12 @@ export const sportsFindTeam = tool('sports_find_team', {
               t.abbreviation.toLowerCase() === q ||
               t.location.toLowerCase().includes(q)
             ) {
-              // Check if not already present (by espnId)
-              const alreadyInResults = results.some((r) => r.espnId === t.espnId && t.espnId);
-              if (!alreadyInResults) results.push(t);
+              results.push(t);
             }
           }
         } catch (error: unknown) {
           rethrowTerminalProviderError(error, ctx);
+          unavailableSources.push(unavailableSource('espn', 'team_list'));
           ctx.log.warning('ESPN team list fetch failed during find_team', { league: input.league });
         }
 
@@ -165,12 +185,12 @@ export const sportsFindTeam = tool('sports_find_team', {
                 t.displayName.toLowerCase().includes(q) ||
                 t.abbreviation.toLowerCase() === q
               ) {
-                const alreadyInResults = results.some((r) => r.mlbId === t.mlbId && t.mlbId);
-                if (!alreadyInResults) results.push(t);
+                results.push(t);
               }
             }
           } catch (error: unknown) {
             rethrowTerminalProviderError(error, ctx);
+            unavailableSources.push(unavailableSource('mlbstats', 'team_list'));
             ctx.log.warning('MLB teams fetch failed during find_team');
           }
         }
@@ -185,24 +205,30 @@ export const sportsFindTeam = tool('sports_find_team', {
             t.displayName.toLowerCase().includes(q) ||
             t.abbreviation.toLowerCase() === q
           ) {
-            const alreadyInResults = results.some((r) => r.mlbId === t.mlbId && t.mlbId);
-            if (!alreadyInResults) results.push(t);
+            results.push(t);
           }
         }
       } catch (error: unknown) {
         rethrowTerminalProviderError(error, ctx);
+        unavailableSources.push(unavailableSource('mlbstats', 'team_list'));
         ctx.log.warning('MLB teams fetch failed during find_team');
       }
     }
 
     // Deduplicate by displayName (case-insensitive), merging cross-reference IDs so that
     // espnId/mlbId/tsdbId from any matching record survive in the canonical output entry.
-    const byName = new Map<string, NormalizedTeam>();
+    const deduped: NormalizedTeam[] = [];
     for (const t of results) {
       const key = t.displayName.toLowerCase();
-      const existing = byName.get(key);
+      const existing = deduped.find(
+        (r) =>
+          (t.espnId !== null && r.espnId === t.espnId) ||
+          (t.mlbId !== null && r.mlbId === t.mlbId) ||
+          (t.tsdbId !== null && r.tsdbId === t.tsdbId) ||
+          r.displayName.toLowerCase() === key,
+      );
       if (!existing) {
-        byName.set(key, { ...t });
+        deduped.push({ ...t });
       } else {
         // Merge IDs — preserve whichever record has a non-null value for each field
         existing.espnId ??= t.espnId;
@@ -210,17 +236,24 @@ export const sportsFindTeam = tool('sports_find_team', {
         existing.tsdbId ??= t.tsdbId;
         // Keep the more informative record (ESPN/MLB has venueName; TSDB often has logoUrl)
         existing.venueName ??= t.venueName;
+        existing.venueId ??= t.venueId;
         existing.logoUrl ??= t.logoUrl;
       }
     }
-    const deduped = [...byName.values()];
 
     if (deduped.length === 0) {
+      if (unavailableSources.length)
+        throw ctx.fail(
+          'sources_unavailable',
+          'No matches returned while optional sources were unavailable.',
+          { unavailableSources, ...ctx.recoveryFor('sources_unavailable') },
+        );
       throw ctx.fail('no_match', `No team found matching "${input.query}".`, {
         ...ctx.recoveryFor('no_match'),
       });
     }
 
+    if (unavailableSources.length) ctx.enrich({ unavailableSources });
     if (tsdbContributed && getServerConfig().theSportsDbApiKey === '3') {
       ctx.enrich.notice(
         'TheSportsDB free-key search contributions may be incomplete (one-record limit). Try a fuller name or a premium key. ESPN and MLB results are unaffected by this limit.',

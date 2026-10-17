@@ -28,11 +28,27 @@ const LEAGUE_ENUM = z.enum([
 
 export const sportsGetScores = tool('sports_get_scores', {
   description:
-    "Live and final scores for a league on a given provider-calendar date, optionally filtered by team name. Returns teams, scores, status, period or clock, and UTC start. Omitted dates use today's US Eastern calendar day, including daylight saving time. NCAAB covers men's Division I; NCAAF covers FBS.",
+    "Live and final scores for a league on a given provider-calendar date, optionally filtered by team name. Returns teams, scores, status, period or clock, and UTC start. Pages default to 100 games, capped at 200; continue with nextOffset and the same filters, or use sports_get_schedule for date windows. Omitted dates use today's US Eastern calendar day. NCAAB covers men's Division I; NCAAF covers FBS.",
 
   annotations: { readOnlyHint: true, openWorldHint: true },
 
   input: z.object({
+    limit: z
+      .number()
+      .int()
+      .positive()
+      .max(Number.MAX_SAFE_INTEGER)
+      .optional()
+      .describe('Games per page, default 100; values above 200 are clamped and disclosed.'),
+    offset: z
+      .number()
+      .int()
+      .nonnegative()
+      .max(Number.MAX_SAFE_INTEGER)
+      .optional()
+      .describe(
+        'Zero-based game offset, default 0. Continue with nextOffset and the same filters.',
+      ),
     league: LEAGUE_ENUM.describe(
       'League identifier. Supported: nfl, nba, mlb, nhl, epl, mls, laliga, bundesliga, seriea, ligue1, ucl, ncaaf, ncaab.',
     ),
@@ -111,6 +127,17 @@ export const sportsGetScores = tool('sports_get_scores', {
   }),
 
   enrichment: {
+    availableGames: z
+      .number()
+      .describe('Total games after filtering in the acquired provider slate.'),
+    totalReturned: z.number().describe('Games returned on this page.'),
+    effectiveLimit: z.number().describe('Applied page limit, at most 200.'),
+    offset: z.number().describe('Applied zero-based game offset.'),
+    truncated: z.boolean().describe('Whether games remain after this page.'),
+    nextOffset: z
+      .number()
+      .optional()
+      .describe('Next game offset; repeat the same date and team filter.'),
     emptyReason: z
       .enum(['no_games', 'no_team_matches'])
       .optional()
@@ -152,16 +179,44 @@ export const sportsGetScores = tool('sports_get_scores', {
           : `No games found for ${input.league.toUpperCase()} on ${effectiveDate}.`
         : undefined;
 
+    games = games.toSorted(
+      (a, b) => a.startTimeUtc.localeCompare(b.startTimeUtc) || a.id.localeCompare(b.id),
+    );
+    const availableGames = games.length;
+    const effectiveLimit = Math.min(input.limit ?? 100, 200);
+    const offset = input.offset ?? 0;
+    const page = games.slice(offset, offset + effectiveLimit);
+    const truncated = offset + page.length < availableGames;
+    const notices = [
+      ...(reason ? [reason] : []),
+      ...((input.limit ?? 100) > effectiveLimit
+        ? [`Requested limit ${input.limit} clamped to 200.`]
+        : []),
+      ...(availableGames && !page.length
+        ? [`Offset ${offset} is past the ${availableGames} available games.`]
+        : []),
+      ...(truncated
+        ? [
+            'Continue with nextOffset and the same date and team filter. sports_get_schedule also supports date windows.',
+          ]
+        : []),
+    ];
+
     ctx.enrich({
-      ...(reason
-        ? { emptyReason: providerGames ? 'no_team_matches' : 'no_games', notice: reason }
-        : {}),
+      availableGames,
+      totalReturned: page.length,
+      effectiveLimit,
+      offset,
+      truncated,
+      ...(truncated ? { nextOffset: offset + page.length } : {}),
+      ...(reason ? { emptyReason: providerGames ? 'no_team_matches' : 'no_games' } : {}),
+      ...(notices.length ? { notice: notices.join(' ') } : {}),
       ...(input.league === 'ncaaf' ? { coverage: 'FBS football.' } : {}),
       ...(input.league === 'ncaab' ? { coverage: "Men's Division I basketball." } : {}),
     });
 
     return {
-      games,
+      games: page,
       date: effectiveDate,
       league: input.league,
       ...(reason ? { reason } : {}),
