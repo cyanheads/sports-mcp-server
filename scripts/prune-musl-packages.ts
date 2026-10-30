@@ -6,7 +6,7 @@
  * `bun install --os/--cpu` has no libc filter, so an optional dependency
  * published in glibc and musl variants installs both: DuckDB's native
  * bindings add a ~70 MB musl copy per image. The runtime image
- * (`node:24-bookworm-slim`) is Debian, glibc, and never loads it. Every
+ * (`oven/bun:<version>-slim`) is Debian, glibc, and never loads it. Every
  * installed package whose own `package.json` `libc` lists `musl` and not
  * `glibc` is deleted, at any depth — hoisted, scoped, nested `node_modules`,
  * and Bun's isolated `node_modules/.bun` store — along with each symlink that
