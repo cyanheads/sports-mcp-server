@@ -17,10 +17,10 @@
       "environmentVariables": [
         {
           "name": "THESPORTSDB_API_KEY",
-          "description": "TheSportsDB API key. Defaults to '3', whose team/player searches have a one-record limit. A premium key enables broader searches.",
+          "description": "TheSportsDB API key. Defaults to '123', whose team/player searches have a one-record limit. A premium key enables broader searches.",
           "format": "string",
           "isRequired": false,
-          "default": "3"
+          "default": "123"
         },
         {
           "name": "MCP_LOG_LEVEL",
@@ -49,10 +49,10 @@
         },
         {
           "name": "THESPORTSDB_API_KEY",
-          "description": "TheSportsDB API key. Defaults to '3', whose team/player searches have a one-record limit. A premium key enables broader searches.",
+          "description": "TheSportsDB API key. Defaults to '123', whose team/player searches have a one-record limit. A premium key enables broader searches.",
           "format": "string",
           "isRequired": false,
-          "default": "3"
+          "default": "123"
         },
         {
           "name": "MCP_HTTP_HOST",

@@ -5,7 +5,8 @@
 
 import { tool, z } from '@cyanheads/mcp-ts-core';
 import { JsonRpcErrorCode } from '@cyanheads/mcp-ts-core/errors';
-import { getServerConfig } from '@/config/server-config.js';
+import { markdownImage } from '@cyanheads/mcp-ts-core/utils';
+import { getServerConfig, THE_SPORTS_DB_PUBLIC_KEY } from '@/config/server-config.js';
 import { getEspnService } from '@/services/espn/espn-service.js';
 import { getMlbService } from '@/services/mlb/mlb-service.js';
 import {
@@ -254,7 +255,7 @@ export const sportsFindTeam = tool('sports_find_team', {
     }
 
     if (unavailableSources.length) ctx.enrich({ unavailableSources });
-    if (tsdbContributed && getServerConfig().theSportsDbApiKey === '3') {
+    if (tsdbContributed && getServerConfig().theSportsDbApiKey === THE_SPORTS_DB_PUBLIC_KEY) {
       ctx.enrich.notice(
         'TheSportsDB free-key search contributions may be incomplete (one-record limit). Try a fuller name or a premium key. ESPN and MLB results are unaffected by this limit.',
       );
@@ -292,7 +293,7 @@ export const sportsFindTeam = tool('sports_find_team', {
       lines.push(
         inline`IDs — Primary: ${t.id} | ESPN: ${t.espnId ?? 'N/A'} | MLB: ${t.mlbId ?? 'N/A'} | TSDB: ${t.tsdbId ?? 'N/A'}`,
       );
-      if (t.logoUrl) lines.push(inline`Logo: ${t.logoUrl}`);
+      if (t.logoUrl) lines.push(`Logo: ${markdownImage(t.displayName, t.logoUrl)}`);
       lines.push(inline`Source: ${t.source}`);
     }
 

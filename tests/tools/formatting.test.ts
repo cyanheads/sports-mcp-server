@@ -5,6 +5,7 @@
 
 import { runToolContract } from '@cyanheads/mcp-ts-core/testing';
 import type { AnyToolDefinition } from '@cyanheads/mcp-ts-core/tools';
+import MarkdownIt from 'markdown-it';
 import { describe, expect, it } from 'vitest';
 import {
   sportsFindPlayer,
@@ -172,7 +173,7 @@ function leaves(value: unknown): string[] {
 
 function multiline(value: unknown, key = ''): unknown {
   if (typeof value === 'string')
-    return ['source', 'status', 'description'].includes(key)
+    return ['source', 'status', 'description', 'logoUrl', 'thumbnailUrl'].includes(key)
       ? value
       : `${value}\r\nforged\rheading\nend`;
   if (Array.isArray(value)) return value.map((item) => multiline(item));
@@ -191,7 +192,7 @@ describe.each(cases)('$tool.name formatting', ({ tool, input, output, heading })
     let slot = 0;
     function inject(value: unknown, key = ''): unknown {
       if (typeof value === 'string')
-        return ['source', 'status', 'description'].includes(key)
+        return ['source', 'status', 'description', 'logoUrl', 'thumbnailUrl'].includes(key)
           ? value
           : `${value} ${marker} slot${slot++}`;
       if (Array.isArray(value)) return value.map((v) => inject(v));
@@ -245,7 +246,13 @@ describe.each(cases)('$tool.name formatting', ({ tool, input, output, heading })
       .map((block) => (block.type === 'text' ? block.text : ''))
       .join('\n');
     expect(text).not.toContain('\r');
-    expect(text).not.toMatch(/\nforged|\nheading|\nend/);
+    for (const block of markdown.parse(text, {})) {
+      if (block.type === 'inline') {
+        for (const token of block.children ?? []) {
+          if (token.type !== 'image') expect(token.content).not.toMatch(/\nforged|\nheading|\nend/);
+        }
+      }
+    }
     for (const value of leaves(before)) expect(text).toContain(value.replace(/\r\n|[\r\n]/g, ' '));
     expect(parsed).toEqual(before);
   });
@@ -274,6 +281,113 @@ it('preserves authored emphasis around whitespace at template joins', () => {
   expect(inline`**${'\r\nname\r\n'}**`).toBe('**&#32;name&#32;**');
 });
 
+const markdown = new MarkdownIt('commonmark');
+// Inspect the destination before the renderer percent-encodes it for HTML.
+markdown.normalizeLink = (url) => url;
+const imageCases = cases.filter(({ tool }) =>
+  [sportsFindTeam, sportsGetTeam, sportsFindPlayer, sportsGetPlayer].some(
+    (imageTool) => imageTool.name === tool.name,
+  ),
+);
+
+function imageTokens(text: string) {
+  return markdown
+    .parse(text, {})
+    .flatMap((block) => block.children ?? [])
+    .filter((token) => token.type === 'image');
+}
+
+function withImage(output: Record<string, unknown>, name: string, url: string | null) {
+  return JSON.parse(JSON.stringify(output), (key, value) => {
+    if (key === 'logoUrl' || key === 'thumbnailUrl') return url;
+    if (key === 'name' || key === 'displayName') return name;
+    return value;
+  });
+}
+
+it.each(imageCases)(
+  '$tool.name renders exactly one safe image with literal alt text',
+  async ({ tool, input, output }) => {
+    const name = 'A ] ![forged](https://evil.example) <b> &copy; **name**';
+    const url = 'https://example.com/a b(1).png?x=1&y=<a>&entity=&copy;';
+    const parsed = tool.output.parse(withImage(output, name, url));
+    const before = structuredClone(parsed);
+    const response = await runToolContract(
+      { ...tool, enrichment: undefined, handler: async () => parsed },
+      input,
+    );
+    expect(response.isError).not.toBe(true);
+    expect(response.structuredContent).toEqual(before);
+    const text = response.content
+      .map((block) => (block.type === 'text' ? block.text : ''))
+      .join('\n');
+    const images = imageTokens(text);
+    expect(images).toHaveLength(1);
+    expect(images[0]!.attrGet('src')).toBe(url);
+    expect(images[0]!.children?.map((token) => token.content).join('')).toBe(name);
+    expect(
+      markdown
+        .parse(text, {})
+        .flatMap((block) => block.children ?? [])
+        .filter((token) => ['link_open', 'html_inline'].includes(token.type)),
+    ).toEqual([]);
+    expect(parsed).toEqual(before);
+  },
+);
+
+it.each([
+  ['http://example.com/logo.png', true],
+  ['https://example.com/a\\b.png?x=1&y=2', true],
+  ['https://example.com/a b(1).png?x=<tag>&entity=&copy;', true],
+  ['javascript:alert(1)', false],
+  ['data:image/png;base64,AA', false],
+  ['/relative/logo.png', false],
+  ['not a URL', false],
+  ['https://example.com/a\n![forged](https://evil.example)', false],
+  ['https://example.com/a\r![forged](https://evil.example)', false],
+] as const)('image destinations round-trip or remain literal: %j', (url, valid) => {
+  const output = sportsGetPlayer.output.parse({ player: { ...player, thumbnailUrl: url } });
+  const text = sportsGetPlayer.format!(output)
+    .map((block) => (block.type === 'text' ? block.text : ''))
+    .join('\n');
+  const images = imageTokens(text);
+  expect(images).toHaveLength(valid ? 1 : 0);
+  if (valid) expect(images[0]!.attrGet('src')).toBe(url);
+  else {
+    const literalText = markdown
+      .parse(text, {})
+      .flatMap((block) => block.children ?? [])
+      .filter((token) => token.type === 'text')
+      .map((token) => token.content)
+      .join('\n');
+    for (const line of url.replaceAll('\r', '\n').split('\n')) expect(literalText).toContain(line);
+  }
+  expect(output.player.thumbnailUrl).toBe(url);
+});
+
+it.each(imageCases)(
+  '$tool.name omits missing image fields without changing structured values',
+  async ({ tool, input, output }) => {
+    const withoutImages = JSON.parse(JSON.stringify(output), (key, value) =>
+      key === 'logoUrl' || key === 'thumbnailUrl' ? null : value,
+    );
+    const parsed = tool.output.parse(withoutImages);
+    const response = await runToolContract(
+      { ...tool, enrichment: undefined, handler: async () => parsed },
+      input,
+    );
+    expect(response.structuredContent).toEqual(parsed);
+    const text = response.content
+      .map((block) => (block.type === 'text' ? block.text : ''))
+      .join('\n');
+    expect(text).not.toContain('Logo:');
+    expect(text).not.toContain('Logo:**');
+    expect(text).not.toContain('Thumbnail:');
+    expect(text).not.toContain('Thumbnail:**');
+    expect(imageTokens(text)).toEqual([]);
+  },
+);
+
 it('fences the entire biography with a delimiter longer than embedded fences', async () => {
   const description =
     'Start\r\n```\n# forged heading\n````````\r~~quoted~~\n' + 'Full biography '.repeat(1000);
@@ -287,11 +401,18 @@ it('fences the entire biography with a delimiter longer than embedded fences', a
     .map((block) => (block.type === 'text' ? block.text : ''))
     .join('\n');
   expect(text).toContain(`\n\`\`\`\`\`\`\`\`\`text\n${description}\n\`\`\`\`\`\`\`\`\`\n`);
+  expect(
+    markdown
+      .parse(text, {})
+      .filter((token) => token.type === 'fence')
+      .map((token) => token.content),
+  ).toEqual([`${description.replaceAll('\r\n', '\n').replaceAll('\r', '\n')}\n`]);
 });
 
-it('bounds inline escaping thread CPU across adversarial 64x spans', () => {
-  const spans = [5000, 10000, 20000, 40000, 80000, 160000, 320000];
-  for (const pattern of ['<>&*_[]`\\~', 'a\r\nb\rc\n<>&', '&lt;'.repeat(8)]) {
+it.each(['<>&*_[]`\\~', 'a\r\nb\rc\n<>&', '&lt;'.repeat(8)])(
+  'bounds inline escaping thread CPU across adversarial 64x spans: %j',
+  (pattern) => {
+    const spans = [5000, 10000, 20000, 40000, 80000, 160000, 320000];
     const samples: number[] = [];
     for (const size of spans) {
       const value = pattern.repeat(Math.ceil(size / pattern.length)).slice(0, size);
@@ -305,5 +426,5 @@ it('bounds inline escaping thread CPU across adversarial 64x spans', () => {
     }
     expect(samples[6]! / Math.max(samples[0]!, 1)).toBeLessThan(256);
     console.info('inline thread CPU µs', JSON.stringify({ pattern, spans, samples }));
-  }
-});
+  },
+);

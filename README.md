@@ -7,7 +7,7 @@
 
 <div align="center">
 
-[![Version](https://img.shields.io/badge/Version-0.5.0-blue.svg?style=flat-square)](./CHANGELOG.md) [![License](https://img.shields.io/badge/License-Apache%202.0-orange.svg?style=flat-square)](./LICENSE) [![Docker](https://img.shields.io/badge/Docker-ghcr.io-2496ED?style=flat-square&logo=docker&logoColor=white)](https://github.com/users/cyanheads/packages/container/package/sports-mcp-server) [![MCP SDK](https://img.shields.io/badge/MCP%20SDK-^2.3.1-green.svg?style=flat-square)](https://modelcontextprotocol.io/) [![npm](https://img.shields.io/npm/v/@cyanheads/sports-mcp-server?style=flat-square&logo=npm&logoColor=white)](https://www.npmjs.com/package/@cyanheads/sports-mcp-server) [![TypeScript](https://img.shields.io/badge/TypeScript-^7.0.2-3178C6.svg?style=flat-square)](https://www.typescriptlang.org/) [![Bun](https://img.shields.io/badge/Bun-v1.4.3%2B-blueviolet.svg?style=flat-square)](https://bun.sh/)
+[![Version](https://img.shields.io/badge/Version-0.5.0-blue.svg?style=flat-square)](./CHANGELOG.md) [![License](https://img.shields.io/badge/License-Apache%202.0-orange.svg?style=flat-square)](./LICENSE) [![Docker](https://img.shields.io/badge/Docker-ghcr.io-2496ED?style=flat-square&logo=docker&logoColor=white)](https://github.com/users/cyanheads/packages/container/package/sports-mcp-server) [![MCP SDK](https://img.shields.io/badge/MCP%20SDK-^2.4.0-green.svg?style=flat-square)](https://modelcontextprotocol.io/) [![npm](https://img.shields.io/npm/v/@cyanheads/sports-mcp-server?style=flat-square&logo=npm&logoColor=white)](https://www.npmjs.com/package/@cyanheads/sports-mcp-server) [![TypeScript](https://img.shields.io/badge/TypeScript-^7.0.2-3178C6.svg?style=flat-square)](https://www.typescriptlang.org/) [![Bun](https://img.shields.io/badge/Bun-v1.4.4%2B-blueviolet.svg?style=flat-square)](https://bun.sh/)
 
 </div>
 
@@ -38,6 +38,10 @@ Live and historical sports data from ESPN, MLB StatsAPI, and TheSportsDB. Check 
 | `sports_get_team` | Team detail combining metadata, roster, recent results, and upcoming fixtures. |
 | `sports_get_player` | Player details from TheSportsDB — biography, team, position, and physical stats. |
 
+### Agent skill
+
+The [sports-guide](./skills/sports-guide/SKILL.md) covers complete fixture ranges, game recaps, standings comparisons, and player identity checks. It ships with plugin installs, npm, Docker, and the desktop bundle, and is available to MCP clients as a skill resource.
+
 ## Capability reference
 
 ### `sports_find_team` <sub>tool</sub>
@@ -52,7 +56,7 @@ Live and historical sports data from ESPN, MLB StatsAPI, and TheSportsDB. Check 
 
 - Free-text `query` (max 200 characters); optional `sport` is advisory and does not filter
 - Returns player IDs, name, team, position, nationality, birth date, and thumbnail; `no_match` when none is found
-- The default key `3` limits searches to one record
+- The default key `123` limits searches to one record
 
 ---
 
@@ -108,7 +112,7 @@ Built on [`@cyanheads/mcp-ts-core`](https://github.com/cyanheads/mcp-ts-core): s
 
 Sports-specific:
 
-- Three keyless sources — ESPN site API, MLB StatsAPI, and TheSportsDB (free tier key `3`)
+- Three keyless sources — ESPN site API, MLB StatsAPI, and TheSportsDB (free tier key `123`)
 - League routing sends each query to the best source per sport
 - Normalized output types across sources — `NormalizedGame`, `NormalizedTeam`, `NormalizedPlayer`, `NormalizedStanding`
 - Cross-source team IDs merged onto one record by `sports_find_team`
@@ -123,104 +127,32 @@ Agent-friendly output:
 
 ## Getting started
 
-Add the following to your MCP client configuration file.
+Add it to Claude Code:
 
-```json
-{
-  "mcpServers": {
-    "sports": {
-      "type": "stdio",
-      "command": "bunx",
-      "args": ["@cyanheads/sports-mcp-server@latest"],
-      "env": {
-        "MCP_TRANSPORT_TYPE": "stdio",
-        "MCP_LOG_LEVEL": "info"
-      }
-    }
-  }
-}
+```sh
+claude mcp add sports-mcp-server -- npx -y @cyanheads/sports-mcp-server
 ```
 
-Or with npx (no Bun required):
+For other clients, add this to the MCP config file:
 
 ```json
 {
   "mcpServers": {
-    "sports": {
-      "type": "stdio",
+    "sports-mcp-server": {
       "command": "npx",
-      "args": ["-y", "@cyanheads/sports-mcp-server@latest"],
-      "env": {
-        "MCP_TRANSPORT_TYPE": "stdio",
-        "MCP_LOG_LEVEL": "info"
-      }
+      "args": ["-y", "@cyanheads/sports-mcp-server"]
     }
   }
 }
 ```
 
-Or with Docker:
-
-```json
-{
-  "mcpServers": {
-    "sports": {
-      "type": "stdio",
-      "command": "docker",
-      "args": [
-        "run", "-i", "--rm",
-        "-e", "MCP_TRANSPORT_TYPE=stdio",
-        "ghcr.io/cyanheads/sports-mcp-server:latest"
-      ]
-    }
-  }
-}
-```
-
-For Streamable HTTP, set the transport and start the server:
-
-```sh
-MCP_TRANSPORT_TYPE=http MCP_HTTP_PORT=3010 bun run start:http
-# Server listens at http://localhost:3010/mcp
-```
-
-### Prerequisites
-
-- [Bun v1.4.0](https://bun.sh/) or higher (or Node.js v24+).
-- No API keys required — ESPN and MLB StatsAPI are fully keyless; TheSportsDB ships with a free public test key (`3`).
-
-### Installation
-
-1. **Clone the repository:**
-
-```sh
-git clone https://github.com/cyanheads/sports-mcp-server.git
-```
-
-2. **Navigate into the directory:**
-
-```sh
-cd sports-mcp-server
-```
-
-3. **Install dependencies:**
-
-```sh
-bun install
-```
-
-4. **Configure environment:**
-
-```sh
-cp .env.example .env
-# edit .env to override defaults (all optional)
-```
+No API keys are required. `THESPORTSDB_API_KEY` optionally enables a premium key for broader player and team searches; the default free key returns at most one record. For Docker or a source build, see [Running the server](#running-the-server).
 
 ## Configuration
 
 | Variable | Description | Default |
 |:---------|:------------|:--------|
-| `THESPORTSDB_API_KEY` | TheSportsDB API key. The free key limits searches to one record. | `3` |
+| `THESPORTSDB_API_KEY` | TheSportsDB API key. The free key limits searches to one record. | `123` |
 | `MCP_TRANSPORT_TYPE` | Transport: `stdio` or `http`. | `stdio` |
 | `MCP_HTTP_PORT` | Port for HTTP server. | `3010` |
 | `MCP_SESSION_MODE` | HTTP session mode: `stateful`, `stateless`, or `auto`. | `stateless` |
@@ -237,6 +169,15 @@ See [`.env.example`](./.env.example) for the full list of optional overrides.
 ## Running the server
 
 ### Local development
+
+Requires [Bun v1.4.0](https://bun.sh/) or higher and Node.js v24+.
+
+```sh
+git clone https://github.com/cyanheads/sports-mcp-server.git
+cd sports-mcp-server && bun install
+cp .env.example .env
+# All overrides are optional.
+```
 
 Serving commands execute Node, including when launched with `bun run`. Bun handles dependency resolution and build tooling; ESPN requests run under Node.
 
@@ -263,11 +204,10 @@ Serving commands execute Node, including when launched with `bun run`. Bun handl
 ### Docker
 
 ```sh
-docker build -t sports-mcp-server .
-docker run --rm -p 3010:3010 sports-mcp-server
+docker run --rm -p 3010:3010 ghcr.io/cyanheads/sports-mcp-server:latest
 ```
 
-The Dockerfile builds with Bun, runs the production server under Node, defaults to HTTP transport and stateless session mode, and logs to `/var/log/sports-mcp-server`. OpenTelemetry peer dependencies are installed by default — build with `--build-arg OTEL_ENABLED=false` to omit them.
+The image builds with Bun, runs the production server under Node, defaults to HTTP transport and stateless session mode, and logs to `/var/log/sports-mcp-server`. For stdio, use `docker run -i --rm -e MCP_TRANSPORT_TYPE=stdio ghcr.io/cyanheads/sports-mcp-server:latest`. To build locally, use `docker build -t sports-mcp-server .`; OpenTelemetry peer dependencies are installed by default — build with `--build-arg OTEL_ENABLED=false` to omit them.
 
 ## Project structure
 

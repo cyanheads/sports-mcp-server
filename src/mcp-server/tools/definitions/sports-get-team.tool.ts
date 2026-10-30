@@ -5,7 +5,7 @@
 
 import { tool, z } from '@cyanheads/mcp-ts-core';
 import { JsonRpcErrorCode } from '@cyanheads/mcp-ts-core/errors';
-import { withRetry } from '@cyanheads/mcp-ts-core/utils';
+import { markdownImage, withRetry } from '@cyanheads/mcp-ts-core/utils';
 import { getEspnService } from '@/services/espn/espn-service.js';
 import { fetchProviderText } from '@/services/fetch-provider-text.js';
 import { getMlbService } from '@/services/mlb/mlb-service.js';
@@ -332,7 +332,7 @@ export const sportsGetTeam = tool('sports_get_team', {
       inline`**Abbrev:** ${t.abbreviation} | **Location:** ${t.location} | **League:** ${t.league}`,
       inline`**Venue:** ${t.venueName ?? 'N/A'} | **Source:** ${t.source}`,
       inline`**IDs:** primary=${t.id} espn=${t.espnId ?? 'N/A'} mlb=${t.mlbId ?? 'N/A'} tsdb=${t.tsdbId ?? 'N/A'}`,
-      t.logoUrl ? inline`**Logo:** ${t.logoUrl}` : '',
+      t.logoUrl ? `**Logo:** ${markdownImage(t.displayName, t.logoUrl)}` : '',
       '',
       `## Roster (${result.roster.length} players)`,
     ];

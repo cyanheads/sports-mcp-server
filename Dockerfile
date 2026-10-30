@@ -7,7 +7,7 @@
 # aborts under QEMU emulation, which multi-arch builds hit on the non-native
 # builder. The produced JS is architecture-independent.
 # ==============================================================================
-FROM --platform=$BUILDPLATFORM oven/bun:1.4.3 AS build
+FROM --platform=$BUILDPLATFORM oven/bun:1.4.4 AS build
 
 WORKDIR /usr/src/app
 
@@ -24,6 +24,8 @@ RUN --mount=type=cache,target=/root/.bun/install/cache \
 # Copy the rest of the source code
 COPY . .
 
+RUN mkdir -p skills
+
 # Build the application
 RUN bun run build
 
@@ -35,7 +37,7 @@ RUN bun run build
 # The scanner and OTel installer execute JavaScript, so neither runs under QEMU.
 # The final runtime copies only these production dependencies into the Node image.
 # ==============================================================================
-FROM --platform=$BUILDPLATFORM oven/bun:1.4.3 AS deps
+FROM --platform=$BUILDPLATFORM oven/bun:1.4.4 AS deps
 
 WORKDIR /usr/src/app
 
@@ -102,6 +104,7 @@ COPY --from=deps /usr/src/app/node_modules ./node_modules
 
 # Copy the compiled application code from the build stage
 COPY --from=build /usr/src/app/dist ./dist
+COPY --from=build /usr/src/app/skills ./skills
 
 # Create and set permissions for the log directory, assigning ownership to the built-in Node user.
 RUN mkdir -p /var/log/sports-mcp-server && chown -R node:node /var/log/sports-mcp-server

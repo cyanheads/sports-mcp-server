@@ -5,6 +5,7 @@
 
 import { tool, z } from '@cyanheads/mcp-ts-core';
 import { JsonRpcErrorCode } from '@cyanheads/mcp-ts-core/errors';
+import { markdownImage } from '@cyanheads/mcp-ts-core/utils';
 import { getTheSportsDbService } from '@/services/thesportsdb/thesportsdb-service.js';
 import { inline } from '../formatting.js';
 
@@ -84,7 +85,7 @@ export const sportsGetPlayer = tool('sports_get_player', {
       inline`**ID:** ${p.id} (TSDB: ${p.tsdbId}) | **ESPN:** ${p.espnId ?? 'N/A'}`,
     ];
 
-    if (p.thumbnailUrl) lines.push(inline`**Thumbnail:** ${p.thumbnailUrl}`);
+    if (p.thumbnailUrl) lines.push(`**Thumbnail:** ${markdownImage(p.name, p.thumbnailUrl)}`);
 
     if (p.description) {
       lines.push('', '## Bio');

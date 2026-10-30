@@ -19,7 +19,7 @@ Eight read-only tools are registered.
 
 ### Resources
 
-None — all data is live and time-sensitive; a stable-URI resource model doesn't add value over the tool surface.
+`skill://sports-guide/SKILL.md` serves the agent guide for fixture completeness, game recaps, standings comparisons, and player identity checks. The SDK also registers the `skill://{+path}` resource template. Sports data remains tool-based because it is live and time-sensitive.
 
 ### Prompts
 

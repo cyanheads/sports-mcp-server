@@ -8,8 +8,11 @@ import { createMockContext, runToolContract } from '@cyanheads/mcp-ts-core/testi
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { NormalizedTeam } from '@/services/types.js';
 
-const config = vi.hoisted(() => ({ theSportsDbApiKey: '3' }));
-vi.mock('@/config/server-config.js', () => ({ getServerConfig: () => config }));
+const config = vi.hoisted(() => ({ theSportsDbApiKey: '123' }));
+vi.mock('@/config/server-config.js', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/config/server-config.js')>()),
+  getServerConfig: () => config,
+}));
 
 vi.mock('@/services/espn/espn-service.js', () => ({
   getEspnService: vi.fn(),
@@ -51,7 +54,7 @@ describe('sportsFindTeam', () => {
   const mockTsdbSvc = { searchTeams: vi.fn() };
 
   beforeEach(() => {
-    config.theSportsDbApiKey = '3';
+    config.theSportsDbApiKey = '123';
     vi.clearAllMocks();
     vi.mocked(getEspnService).mockReturnValue(mockEspnSvc as ReturnType<typeof getEspnService>);
     vi.mocked(getMlbService).mockReturnValue(mockMlbSvc as ReturnType<typeof getMlbService>);
@@ -59,7 +62,7 @@ describe('sportsFindTeam', () => {
       mockTsdbSvc as ReturnType<typeof getTheSportsDbService>,
     );
   });
-  it.each(['3', 'custom-key'])(
+  it.each(['123', 'custom-key', '3'])(
     'qualifies only successful free-key TSDB contributions (%s)',
     async (key) => {
       config.theSportsDbApiKey = key;
@@ -67,7 +70,7 @@ describe('sportsFindTeam', () => {
       mockEspnSvc.getTeams.mockResolvedValue([]);
       const result = await runToolContract(sportsFindTeam, { query: 'Arsenal', league: 'epl' });
       expect(result.structuredContent).toMatchObject({ totalFound: 1 });
-      if (key === '3') {
+      if (key === '123') {
         expect(result.structuredContent).toMatchObject({
           notice: expect.stringContaining('TheSportsDB'),
         });
@@ -153,7 +156,7 @@ describe('sportsFindTeam', () => {
         ],
         totalFound: 2,
       });
-      expect(JSON.stringify(result.content)).toContain('Logo: badge');
+      expect(JSON.stringify(result.content)).toContain('Logo: Arsenal (badge)');
       expect([retained, candidate, unrelated]).toEqual(before);
       expect((await runToolContract(sportsFindTeam, input)).structuredContent).toEqual(
         result.structuredContent,

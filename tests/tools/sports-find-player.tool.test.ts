@@ -7,8 +7,11 @@ import { createMockContext, runToolContract } from '@cyanheads/mcp-ts-core/testi
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { NormalizedPlayer } from '@/services/types.js';
 
-const config = vi.hoisted(() => ({ theSportsDbApiKey: '3' }));
-vi.mock('@/config/server-config.js', () => ({ getServerConfig: () => config }));
+const config = vi.hoisted(() => ({ theSportsDbApiKey: '123' }));
+vi.mock('@/config/server-config.js', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/config/server-config.js')>()),
+  getServerConfig: () => config,
+}));
 
 vi.mock('@/services/thesportsdb/thesportsdb-service.js', () => ({
   getTheSportsDbService: vi.fn(),
@@ -40,13 +43,13 @@ describe('sportsFindPlayer', () => {
   const mockTsdbSvc = { searchPlayers: vi.fn() };
 
   beforeEach(() => {
-    config.theSportsDbApiKey = '3';
+    config.theSportsDbApiKey = '123';
     vi.clearAllMocks();
     vi.mocked(getTheSportsDbService).mockReturnValue(
       mockTsdbSvc as ReturnType<typeof getTheSportsDbService>,
     );
   });
-  it.each(['3', 'custom-key'])(
+  it.each(['123', 'custom-key', '3'])(
     'only identifies the known free key %s on both surfaces',
     async (key) => {
       config.theSportsDbApiKey = key;
@@ -56,7 +59,7 @@ describe('sportsFindPlayer', () => {
         sport: 'Curling',
       });
       expect(result.structuredContent).toMatchObject({ totalFound: 1 });
-      if (key === '3') {
+      if (key === '123') {
         expect(result.structuredContent).toMatchObject({
           notice: expect.stringContaining('may be incomplete'),
         });

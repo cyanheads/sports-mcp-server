@@ -5,7 +5,8 @@
 
 import { tool, z } from '@cyanheads/mcp-ts-core';
 import { JsonRpcErrorCode } from '@cyanheads/mcp-ts-core/errors';
-import { getServerConfig } from '@/config/server-config.js';
+import { markdownImage } from '@cyanheads/mcp-ts-core/utils';
+import { getServerConfig, THE_SPORTS_DB_PUBLIC_KEY } from '@/config/server-config.js';
 import { getTheSportsDbService } from '@/services/thesportsdb/thesportsdb-service.js';
 import { inline } from '../formatting.js';
 
@@ -100,7 +101,7 @@ export const sportsFindPlayer = tool('sports_find_player', {
       });
     }
 
-    if (getServerConfig().theSportsDbApiKey === '3') {
+    if (getServerConfig().theSportsDbApiKey === THE_SPORTS_DB_PUBLIC_KEY) {
       ctx.enrich.notice(
         'TheSportsDB free-key search results may be incomplete (one-record limit). Try a fuller name or a premium key.',
       );
@@ -135,7 +136,7 @@ export const sportsFindPlayer = tool('sports_find_player', {
       );
       lines.push(inline`Born: ${p.birthDate ?? 'N/A'} | ID: ${p.id} (TSDB: ${p.tsdbId})`);
       lines.push(inline`Source: ${p.source}`);
-      if (p.thumbnailUrl) lines.push(inline`Thumbnail: ${p.thumbnailUrl}`);
+      if (p.thumbnailUrl) lines.push(`Thumbnail: ${markdownImage(p.name, p.thumbnailUrl)}`);
     }
 
     return [{ type: 'text' as const, text: lines.join('\n') }];
