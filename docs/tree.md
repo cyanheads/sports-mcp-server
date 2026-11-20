@@ -1,6 +1,6 @@
 # sports-mcp-server - Directory Structure
 
-Generated on: 2026-10-30 09:14:31
+Generated on: 2026-11-20 22:09:42
 
 ```text
 sports-mcp-server/
@@ -165,6 +165,7 @@ sports-mcp-server/
 │   │       │   ├── sports-get-scores.tool.ts
 │   │       │   ├── sports-get-standings.tool.ts
 │   │       │   └── sports-get-team.tool.ts
+│   │       ├── format-game-row.ts
 │   │       └── formatting.ts
 │   ├── services/
 │   │   ├── espn/
@@ -190,6 +191,7 @@ sports-mcp-server/
 │   │   │   ├── mlb-board-feed.json
 │   │   │   ├── mlb-future-feed.json
 │   │   │   ├── mlb-missing.json
+│   │   │   ├── mlb-unknown-feed.json
 │   │   │   ├── nba-summary.json
 │   │   │   ├── nfl-board-summary.json
 │   │   │   ├── nfl-board.json
@@ -219,6 +221,7 @@ sports-mcp-server/
 │   ├── tools/
 │   │   ├── calendar-contract.test.ts
 │   │   ├── formatting.test.ts
+│   │   ├── game-status-detail.test.ts
 │   │   ├── sports-find-player.tool.test.ts
 │   │   ├── sports-find-team.tool.test.ts
 │   │   ├── sports-get-game.tool.test.ts

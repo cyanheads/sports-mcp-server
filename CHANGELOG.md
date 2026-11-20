@@ -2,6 +2,10 @@
 
 All notable changes to this project. Each entry links to its full per-version file in [changelog/](changelog/).
 
+## [0.6.1](changelog/0.6.x/0.6.1.md) — 2026-11-20 · 🛡️ Security
+
+Game records show provider status detail, and scoring-play pages can return only the requested sections.
+
 ## [0.6.0](changelog/0.6.x/0.6.0.md) — 2026-10-30
 
 Sports research guide and restored player search
