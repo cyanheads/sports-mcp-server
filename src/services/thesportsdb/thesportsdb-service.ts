@@ -47,16 +47,12 @@ export class TheSportsDbService {
             combined.throwIfAborted();
             const key = getServerConfig().theSportsDbApiKey;
             const scrub = (value: string) => value.replaceAll(key, '[redacted]');
-            throw new McpError(
-              error.code,
-              scrub(error.message),
-              Object.fromEntries(
-                Object.entries(error.data ?? {}).map(([name, value]) => [
-                  name,
-                  typeof value === 'string' ? scrub(value) : value,
-                ]),
-              ),
-            );
+            // Preserve the framework's symbol marking the captured body as log-only.
+            const data = { ...error.data };
+            for (const [name, value] of Object.entries(data)) {
+              if (typeof value === 'string') data[name] = scrub(value);
+            }
+            throw new McpError(error.code, scrub(error.message), data);
           }
           const text = await response.text();
           combined.throwIfAborted();

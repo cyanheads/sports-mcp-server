@@ -8,11 +8,13 @@ import { JsonRpcErrorCode, McpError } from '@cyanheads/mcp-ts-core/errors';
 import { createMockContext, runToolContract } from '@cyanheads/mcp-ts-core/testing';
 import { logger } from '@cyanheads/mcp-ts-core/utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { sportsFindPlayer } from '@/mcp-server/tools/definitions/sports-find-player.tool.js';
 import { sportsGetSchedule } from '@/mcp-server/tools/definitions/sports-get-schedule.tool.js';
 import { sportsGetScores } from '@/mcp-server/tools/definitions/sports-get-scores.tool.js';
 import { sportsGetTeam } from '@/mcp-server/tools/definitions/sports-get-team.tool.js';
 import * as espnModule from '@/services/espn/espn-service.js';
 import * as mlbModule from '@/services/mlb/mlb-service.js';
+import * as tsdbModule from '@/services/thesportsdb/thesportsdb-service.js';
 import { TheSportsDbService } from '@/services/thesportsdb/thesportsdb-service.js';
 
 const KEY = 'sentinel-paid-key-7391';
@@ -355,6 +357,24 @@ describe('ESPN scoreboard recovery', () => {
 });
 
 describe('TheSportsDB credential boundary', () => {
+  it('keeps captured upstream HTTP bodies off both tool response surfaces', async () => {
+    vi.spyOn(tsdbModule, 'getTheSportsDbService').mockReturnValue(new TheSportsDbService());
+    const upstreamMessage = 'Provider diagnostics reserved for logs';
+    const target = installFetch('TSDB', () => new Response(upstreamMessage, { status: 400 }));
+
+    const result = await runToolContract(sportsFindPlayer, { query: 'Seattle' });
+
+    expect(result.isError).toBe(true);
+    expect(result.structuredContent).toMatchObject({
+      error: { code: JsonRpcErrorCode.InvalidParams, data: { status: 400 } },
+    });
+    expect(JSON.stringify(result.structuredContent)).not.toContain(upstreamMessage);
+    expect(JSON.stringify(result.content)).not.toContain(upstreamMessage);
+    expect(result.structuredContent?.error).not.toHaveProperty('data.body');
+    expect(result.structuredContent?.error).not.toHaveProperty('data.responseBody');
+    expect(target).toHaveBeenCalledTimes(1);
+  });
+
   it.each(['http', 'network', 'parse'] as const)(
     'never exposes the paid path key in %s errors or logs',
     async (kind) => {
