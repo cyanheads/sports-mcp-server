@@ -94,6 +94,10 @@ export const sportsGetTeam = tool('sports_get_team', {
             status: z
               .enum(['scheduled', 'in-progress', 'final', 'postponed', 'cancelled'])
               .describe('Game status.'),
+            statusDetail: z
+              .string()
+              .nullable()
+              .describe('Provider status detail, null if unavailable.'),
             homeTeam: z
               .object({
                 id: z.string().describe('Source-prefixed team ID.'),
@@ -131,6 +135,10 @@ export const sportsGetTeam = tool('sports_get_team', {
             status: z
               .enum(['scheduled', 'in-progress', 'final', 'postponed', 'cancelled'])
               .describe('Game status.'),
+            statusDetail: z
+              .string()
+              .nullable()
+              .describe('Provider status detail, null if unavailable.'),
             homeTeam: z
               .object({
                 id: z.string().describe('Source-prefixed team ID.'),
@@ -262,6 +270,8 @@ export const sportsGetTeam = tool('sports_get_team', {
               score: awayRaw?.score != null ? String(awayRaw.score) : null,
             },
             startTimeUtc: String(game.gameDate ?? ''),
+            statusDetail:
+              typeof statusObj?.detailedState === 'string' ? statusObj.detailedState : null,
             source: 'mlbstats' as const,
           });
         }
@@ -346,7 +356,10 @@ export const sportsGetTeam = tool('sports_get_team', {
       lines.push('_No recent results available._');
     } else {
       for (const g of result.recentResults) {
-        lines.push(inline`**${g.shortName}** [${g.id}] — ${g.status} | Start: ${g.startTimeUtc}`);
+        const detail = g.statusDetail == null ? '' : ` | Status detail: ${g.statusDetail}`;
+        lines.push(
+          inline`**${g.shortName}** [${g.id}] — ${g.status}${detail} | Start: ${g.startTimeUtc}`,
+        );
         lines.push(
           inline`  Away: ${g.awayTeam.name} (${g.awayTeam.abbreviation}) [${g.awayTeam.id}] ${g.awayTeam.score ?? '—'}`,
         );
@@ -362,7 +375,10 @@ export const sportsGetTeam = tool('sports_get_team', {
       lines.push('_No upcoming fixtures available._');
     } else {
       for (const g of result.upcomingFixtures) {
-        lines.push(inline`**${g.shortName}** [${g.id}] — ${g.status} | Start: ${g.startTimeUtc}`);
+        const detail = g.statusDetail == null ? '' : ` | Status detail: ${g.statusDetail}`;
+        lines.push(
+          inline`**${g.shortName}** [${g.id}] — ${g.status}${detail} | Start: ${g.startTimeUtc}`,
+        );
         lines.push(
           inline`  Away: ${g.awayTeam.name} (${g.awayTeam.abbreviation}) [${g.awayTeam.id}] ${g.awayTeam.score ?? '—'}`,
         );

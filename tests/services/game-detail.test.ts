@@ -297,6 +297,29 @@ describe('game detail', () => {
     await expect(call).rejects.toMatchObject({ code: JsonRpcErrorCode.InvalidParams });
   });
 
+  it.each([
+    ['0', { gamePk: 0, gameData: { game: { pk: 0 } } }],
+    ['849809', { gamePk: 849809 }],
+    [
+      '1',
+      {
+        gamePk: 849809,
+        gameData: { game: { pk: 0 }, status: { codedGameState: 'X', detailedState: 'Unknown' } },
+      },
+    ],
+  ])(
+    'preserves provider failure for malformed or mismatched MLB metadata for %s',
+    async (id, metadata) => {
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(() => Response.json(metadata)),
+      );
+      await expect(new MlbService().getGame(id, createMockContext())).rejects.toMatchObject({
+        code: JsonRpcErrorCode.ServiceUnavailable,
+      });
+    },
+  );
+
   it.each(['espn', 'mlb'])(
     'treats malformed %s success metadata as a provider failure',
     async (source) => {

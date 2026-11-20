@@ -138,13 +138,14 @@ Each step is independently testable before the next.
 ### Normalized types (cross-source)
 
 ```ts
-// Game — returned by get_scores and get_schedule
+// Game — returned by get_scores, get_schedule and get_game; get_team returns summary rows
 interface NormalizedGame {
   id: string;             // source-prefixed: 'espn:401872656' or 'mlb:823457'
   shortName: string;      // 'SEA @ NYY'
   homeTeam: { id: string; name: string; abbreviation: string; score: string | null };
   awayTeam: { id: string; name: string; abbreviation: string; score: string | null };
   status: 'scheduled' | 'in-progress' | 'final' | 'postponed' | 'cancelled';
+  statusDetail: string | null;    // ESPN shortDetail or MLB detailedState, when available
   period: number | null;          // inning for MLB, quarter/period for others
   clock: string | null;           // '2:34' remaining or game clock display
   startTimeUtc: string;           // ISO 8601

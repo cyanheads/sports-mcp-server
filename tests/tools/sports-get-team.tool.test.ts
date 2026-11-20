@@ -44,6 +44,7 @@ function makeGame(overrides: Partial<NormalizedGame> = {}): NormalizedGame {
     homeTeam: { id: 'espn:6', name: 'Dallas Cowboys', abbreviation: 'DAL', score: null },
     awayTeam: { id: 'espn:26', name: 'Seattle Seahawks', abbreviation: 'SEA', score: null },
     status: 'scheduled',
+    statusDetail: null,
     period: null,
     clock: null,
     startTimeUtc: `${new Date(Date.now() + 7 * 86400_000).toISOString().slice(0, 16)}:00Z`,

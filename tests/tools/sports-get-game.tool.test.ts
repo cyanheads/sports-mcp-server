@@ -140,6 +140,89 @@ describe('sports_get_game', () => {
     expect(text(result).split('Scoring plays:\n')[1]).toMatch(/ \/ Home 0: /);
   });
 
+  it('reconstructs scoring-only pages through the cap and final page', async () => {
+    serve('nba-summary');
+    const omitted = ['periodScores', 'teamStats', 'leaders'];
+    for (const [offset, returnedCount, nextOffset] of [
+      [0, 50, 50],
+      [50, 50, 100],
+      [100, 8, null],
+      [108, 0, null],
+    ] as const) {
+      const args = { ...input, offset, limit: 60 };
+      const full = await runToolContract(sportsGetGame, args);
+      const page = await runToolContract(sportsGetGame, { ...args, sections: ['scoringPlays'] });
+      expect(page.structuredContent).toEqual({
+        ...full.structuredContent,
+        periodScores: [],
+        teamStats: [],
+        leaders: [],
+        omittedSections: omitted,
+        totalCount: 108,
+        returnedCount,
+        nextOffset,
+      });
+      expect(text(page)).toContain('**omittedSections:** periodScores, teamStats, leaders');
+      expect(text(page).split('Scoring plays:\n')[1]?.split('\n\n')[0]).toBe(
+        text(full).split('Scoring plays:\n')[1]?.split('\n\n')[0],
+      );
+      expect(text(page)).toContain('clipped to 50');
+      if (offset === 108) expect(text(page)).toContain('past the 108 available scoring plays');
+    }
+  });
+
+  it('returns only selected details and no continuation when scoring plays are excluded', async () => {
+    serve('nba-summary');
+    const args = { ...input, offset: 200, limit: 60 };
+    const full = await runToolContract(sportsGetGame, args);
+    const selected = await runToolContract(sportsGetGame, { ...args, sections: ['teamStats'] });
+    expect(selected.structuredContent).toMatchObject({
+      game: { id: input.game_id },
+      teamStats: full.structuredContent.teamStats,
+      periodScores: [],
+      leaders: [],
+      scoringPlays: [],
+      omittedSections: ['periodScores', 'leaders', 'scoringPlays'],
+      totalCount: 108,
+      offset: 200,
+      effectiveLimit: 50,
+      returnedCount: 0,
+      servedFrom: null,
+      servedTo: null,
+      nextOffset: null,
+    });
+    expect(selected.structuredContent).not.toHaveProperty('truncationCeiling');
+    expect(selected.structuredContent).not.toHaveProperty('notice');
+    expect(text(selected)).toContain('fieldGoalsMade-fieldGoalsAttempted');
+    expect(text(selected)).toContain('**omittedSections:** periodScores, leaders, scoringPlays');
+    expect(text(selected)).not.toMatch(/clipped|past the 108|No scoring plays/);
+  });
+
+  it('distinguishes selected empty sections from an empty selector on a scheduled game', async () => {
+    serve('nfl-future-summary');
+    const args = { league: 'nfl', game_id: 'espn:401872996' };
+    const keys = ['periodScores', 'teamStats', 'leaders', 'scoringPlays'];
+    const full = await runToolContract(sportsGetGame, args);
+    const all = await runToolContract(sportsGetGame, { ...args, sections: keys });
+    expect(all.structuredContent).toEqual(full.structuredContent);
+    expect(text(all)).toBe(text(full));
+    const none = await runToolContract(sportsGetGame, { ...args, sections: [] });
+    expect(none.structuredContent).toMatchObject({
+      game: { id: args.game_id, status: 'scheduled' },
+      periodScores: [],
+      teamStats: [],
+      leaders: [],
+      scoringPlays: [],
+      omittedSections: keys,
+      totalCount: 0,
+    });
+    expect(none.structuredContent).not.toHaveProperty('notice');
+    expect(text(none)).toContain(
+      '**omittedSections:** periodScores, teamStats, leaders, scoringPlays',
+    );
+    expect(text(none)).not.toContain('scheduled games have no played statistics');
+  });
+
   it.each([
     [
       'nfl-board-summary',
@@ -211,6 +294,7 @@ describe('sports_get_game', () => {
     { ...input, offset: -1 },
     { ...input, limit: 0 },
     { ...input, limit: 1.5 },
+    { ...input, sections: ['boxscore'] },
     { game_id: 'espn:1' },
   ])('rejects invalid input before fetching: %j', async (args) => {
     const fetch = serve('nba-summary');
@@ -246,6 +330,24 @@ describe('sports_get_game', () => {
     });
     expect(text(result)).toContain('Check the league');
   });
+
+  it.each(['mlb:0', 'mlb:1'])(
+    'returns not-found recovery for the MLB placeholder for %s',
+    async (game_id) => {
+      const fetch = serve('mlb-unknown-feed');
+      const result = await runToolContract(sportsGetGame, { league: 'mlb', game_id });
+      expect(result.structuredContent.error).toMatchObject({
+        code: JsonRpcErrorCode.NotFound,
+        data: {
+          reason: 'game_not_found',
+          recovery: { hint: expect.stringContaining('Check the league') },
+        },
+      });
+      expect(text(result)).toContain('game_not_found');
+      expect(text(result)).toContain('Check the league');
+      expect(fetch).toHaveBeenCalledTimes(1);
+    },
+  );
 
   it('cancels in-flight fetch without returning partial performance', async () => {
     const caller = new AbortController();

@@ -250,6 +250,7 @@ export class EspnService {
         (comp.status as Record<string, unknown> | undefined);
       const statusType = status?.type as Record<string, unknown> | undefined;
       const state = String(statusType?.state ?? 'pre');
+      const pregame = statusType?.state === 'pre';
       const typeName = String(statusType?.name ?? '');
       const period = typeof status?.period === 'number' ? status.period : null;
       const displayClock = status?.displayClock != null ? String(status.displayClock) : null;
@@ -258,11 +259,12 @@ export class EspnService {
       games.push({
         id: `espn:${String(e.id ?? '')}`,
         shortName: String(e.shortName ?? `${awayTeam.abbreviation} @ ${homeTeam.abbreviation}`),
-        homeTeam,
-        awayTeam,
+        homeTeam: pregame ? { ...homeTeam, score: null } : homeTeam,
+        awayTeam: pregame ? { ...awayTeam, score: null } : awayTeam,
         status: mapEspnStatus(state, typeName),
+        statusDetail: typeof statusType?.shortDetail === 'string' ? statusType.shortDetail : null,
         period: period === 0 ? null : period,
-        clock: displayClock,
+        clock: pregame ? null : displayClock,
         startTimeUtc: startDate,
         venue:
           (comp.venue as Record<string, unknown>)?.fullName != null

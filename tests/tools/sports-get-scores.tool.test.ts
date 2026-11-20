@@ -27,6 +27,7 @@ function makeGame(overrides: Partial<NormalizedGame> = {}): NormalizedGame {
     homeTeam: { id: 'espn:10', name: 'New York Yankees', abbreviation: 'NYY', score: '3' },
     awayTeam: { id: 'espn:26', name: 'Seattle Mariners', abbreviation: 'SEA', score: '2' },
     status: 'final',
+    statusDetail: 'Final/OT',
     period: null,
     clock: null,
     startTimeUtc: '2026-06-04T18:00:00Z',

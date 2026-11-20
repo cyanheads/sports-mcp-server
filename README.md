@@ -25,6 +25,8 @@
 
 Live and historical sports data from ESPN, MLB StatsAPI, and TheSportsDB. Check scores, schedules, and standings, and look up teams and players across the NFL, NBA, MLB, NHL, major soccer leagues, and college football and basketball.
 
+Game records include the provider's `statusDetail` when available, such as `Final/OT` or `Final/SO`. Pregame ESPN scores and clocks are null until play starts.
+
 ### Tools
 
 | Tool | Description |
@@ -81,6 +83,7 @@ The [sports-guide](./skills/sports-guide/SKILL.md) covers complete fixture range
 - Required `league` and source-prefixed numeric `game_id` from scores, schedules, or team detail; `mlb:` IDs require `league: "mlb"`
 - Returns game metadata plus `periodScores`, `teamStats`, `leaders`, and `scoringPlays`; missing values are null. Scheduled games return metadata only; `game_not_found` for a missing or wrong-league game. Athlete IDs belong to ESPN or MLB, not TheSportsDB
 - `limit` defaults to 20 (max 50) and `offset` to 0; responses include `totalCount`, `returnedCount`, `servedFrom`/`servedTo`, `effectiveLimit`, and `nextOffset`
+- Use `sections: ["scoringPlays"]` on continuation pages to skip repeated statistics and leaders. Omit `sections` for the full response or pass `[]` for game and paging metadata only. Excluded sections have empty arrays and appear in `omittedSections`.
 
 ---
 
@@ -158,7 +161,7 @@ No API keys are required. `THESPORTSDB_API_KEY` optionally enables a premium key
 | `MCP_SESSION_MODE` | HTTP session mode: `stateful`, `stateless`, or `auto`. | `stateless` |
 | `MCP_AUTH_MODE` | Auth mode: `none`, `jwt`, or `oauth`. | `none` |
 | `MCP_LOG_LEVEL` | Log level (RFC 5424). | `info` |
-| `LOGS_DIR` | Directory for log files (Node.js only). | `<project-root>/logs` |
+| `LOGS_DIR` | Directory for log files (Node.js only). Relative paths resolve against the server’s package directory. | `<app-root>/logs` |
 | `LOG_TOOL_FAILURE_PAYLOADS` | Log failed tool arguments and results, redacted by key name and capped by `LOG_TOOL_FAILURE_PAYLOAD_MAX_BYTES` (default `16384`). Free-form values are not redacted. | `false` |
 | `OTEL_ENABLED` | Enable [OpenTelemetry instrumentation](https://github.com/cyanheads/mcp-ts-core/tree/main/docs/telemetry). | `false` |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | Base OTLP/HTTP URL for traces and metrics. | Unset |
@@ -170,7 +173,7 @@ See [`.env.example`](./.env.example) for the full list of optional overrides.
 
 ### Local development
 
-Requires [Bun v1.4.0](https://bun.sh/) or higher and Node.js v24+.
+Requires [Bun v1.4.4](https://bun.sh/) or higher and Node.js v24+.
 
 ```sh
 git clone https://github.com/cyanheads/sports-mcp-server.git

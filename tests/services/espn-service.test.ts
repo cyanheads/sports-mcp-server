@@ -40,7 +40,7 @@ function makeEvent(
   const statusObj = {
     period: 2,
     displayClock: "90'+10'",
-    type: { state, name: 'STATUS_FULL_TIME' },
+    type: { state, name: 'STATUS_FULL_TIME', shortDetail: state === 'post' ? 'Final/OT' : null },
   };
 
   const competition = {
@@ -75,6 +75,43 @@ function makeEvent(
 describe('EspnService.normalizeEvents', () => {
   const ctx = createMockContext();
   const svc = new EspnService();
+
+  it('omits placeholder scores and clock before play', async () => {
+    stubFetch({ events: [makeEvent({ homeScore: '0', awayScore: '0', state: 'pre' })] });
+    const [game] = await svc.getScoreboard('soccer', 'eng.1', '2026-05-18', ctx);
+    expect(game).toMatchObject({
+      homeTeam: { score: null },
+      awayTeam: { score: null },
+      clock: null,
+    });
+  });
+
+  it('omits pregame object scores from team schedules', async () => {
+    const score = { displayValue: '0', value: 0 };
+    stubFetch({
+      events: [
+        makeEvent({ homeScore: score, awayScore: score, state: 'pre', statusAtEvent: false }),
+      ],
+    });
+    const [game] = await svc.getTeamSchedule('soccer', 'eng.1', '359', null, ctx);
+    expect(game).toMatchObject({
+      homeTeam: { score: null },
+      awayTeam: { score: null },
+      clock: null,
+      statusDetail: null,
+    });
+  });
+
+  it.each(['in', 'post'])('keeps real zero scores in state %s', async (state) => {
+    stubFetch({ events: [makeEvent({ homeScore: '0', awayScore: '0', state })] });
+    const [game] = await svc.getScoreboard('soccer', 'eng.1', '2026-05-18', ctx);
+    expect(game).toMatchObject({
+      homeTeam: { score: '0' },
+      awayTeam: { score: '0' },
+      clock: "90'+10'",
+      statusDetail: state === 'post' ? 'Final/OT' : null,
+    });
+  });
 
   it('parses plain string scores (scoreboard format)', async () => {
     stubFetch({ events: [makeEvent({ homeScore: '3', awayScore: '1' })] });

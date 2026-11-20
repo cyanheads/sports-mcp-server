@@ -10,6 +10,7 @@ import { getEspnService } from '@/services/espn/espn-service.js';
 import { getMlbService } from '@/services/mlb/mlb-service.js';
 import { ambiguityDetails, teamCandidates } from '@/services/team-resolver.js';
 import { LEAGUE_ROUTES, type NormalizedGame, type NormalizedTeam } from '@/services/types.js';
+import { formatGameRow } from '../format-game-row.js';
 import { inline } from '../formatting.js';
 
 const LEAGUE_ENUM = z.enum([
@@ -113,6 +114,10 @@ export const sportsGetSchedule = tool('sports_get_schedule', {
             status: z
               .enum(['scheduled', 'in-progress', 'final', 'postponed', 'cancelled'])
               .describe('Game status.'),
+            statusDetail: z
+              .string()
+              .nullable()
+              .describe('Provider status detail, null if unavailable.'),
             period: z
               .number()
               .nullable()
@@ -318,18 +323,7 @@ export const sportsGetSchedule = tool('sports_get_schedule', {
     const lines: string[] = [parts.join('')];
 
     for (const g of result.games) {
-      const periodStr = g.period != null ? ` | Period: ${g.period}` : '';
-      const clockStr = g.clock ? ` | Clock: ${g.clock}` : '';
-      lines.push(inline`**${g.shortName}** [${g.id}] — ${g.status}${periodStr}${clockStr}`);
-      lines.push(
-        inline`  Away: ${g.awayTeam.name} (${g.awayTeam.abbreviation}) [${g.awayTeam.id}] — ${g.awayTeam.score ?? '—'}`,
-      );
-      lines.push(
-        inline`  Home: ${g.homeTeam.name} (${g.homeTeam.abbreviation}) [${g.homeTeam.id}] — ${g.homeTeam.score ?? '—'}`,
-      );
-      lines.push(
-        inline`  Start: ${g.startTimeUtc} | Venue: ${g.venue ?? 'N/A'} | Source: ${g.source}`,
-      );
+      lines.push(...formatGameRow(g, 'Period'));
     }
 
     return [{ type: 'text' as const, text: lines.join('\n') }];

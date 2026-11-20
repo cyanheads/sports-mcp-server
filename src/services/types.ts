@@ -24,6 +24,7 @@ export interface NormalizedGame {
   source: 'espn' | 'mlbstats';
   startTimeUtc: string;
   status: 'scheduled' | 'in-progress' | 'final' | 'postponed' | 'cancelled';
+  statusDetail: string | null;
   venue: string | null;
 }
 

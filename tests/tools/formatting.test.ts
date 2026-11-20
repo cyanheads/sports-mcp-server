@@ -54,6 +54,7 @@ const game = {
   homeTeam: { id: 'espn:10', name: 'New York Yankees', abbreviation: 'NYY', score: '4' },
   awayTeam: { id: 'espn:26', name: 'Seattle Mariners', abbreviation: 'SEA', score: '3' },
   status: 'final',
+  statusDetail: 'Final/SO',
   period: 9,
   clock: 'Bottom',
   startTimeUtc: '2026-07-04T23:00:00Z',
@@ -112,7 +113,7 @@ const cases: Array<{
         },
       ],
     },
-    heading: '**MLB Scores — 2026-07-04** (league: mlb)',
+    heading: '**MLB Game** (league: mlb)',
   },
   {
     tool: sportsFindPlayer,

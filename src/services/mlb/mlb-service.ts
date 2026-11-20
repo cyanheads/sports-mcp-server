@@ -165,6 +165,7 @@ export class MlbService {
             score: awayScore,
           },
           status: mapMlbStatus(abstractState, detailedState),
+          statusDetail: typeof status?.detailedState === 'string' ? status.detailedState : null,
           period: currentInning,
           clock: inningHalf,
           startTimeUtc: String(game.gameDate ?? ''),

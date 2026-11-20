@@ -7,6 +7,7 @@ import { JsonRpcErrorCode } from '@cyanheads/mcp-ts-core/errors';
 import { getEspnService } from '@/services/espn/espn-service.js';
 import { getMlbService } from '@/services/mlb/mlb-service.js';
 import { LEAGUE_ROUTES, SUPPORTED_LEAGUES } from '@/services/types.js';
+import { formatGameRow } from '../format-game-row.js';
 import { inline } from '../formatting.js';
 import { sportsGetScores } from './sports-get-scores.tool.js';
 
@@ -23,10 +24,11 @@ const Person = z
     name: z.string().nullable().describe('Athlete name, null when the event supplies only an ID.'),
   })
   .describe('Game athlete identity.');
+const GameSection = z.enum(['periodScores', 'teamStats', 'leaders', 'scoringPlays']);
 
 export const sportsGetGame = tool('sports_get_game', {
   description:
-    'Game metadata, period scores, team totals, provider top performers, and scoring plays. Pass a game ID returned by sports_get_scores, sports_get_schedule, or sports_get_team with its league; ESPN IDs do not identify a league. Scheduled games return metadata with empty played-stat sections. Scoring plays default to 20 per page, capped at 50; continue with nextOffset and the same league and game_id. Other sections remain on every page. No full player boxscores or season statistics.',
+    'Game metadata, period scores, team totals, provider top performers, and scoring plays. Pass a game ID returned by sports_get_scores, sports_get_schedule, or sports_get_team with its league. Scheduled games have empty played-stat sections. Scoring plays default to 20 per page, capped at 50. Continue with nextOffset and the same league and game_id, using sections: ["scoringPlays"] to skip repeated statistics. No full player boxscores or season statistics.',
   annotations: { readOnlyHint: true, openWorldHint: true },
   input: z.object({
     league: z
@@ -55,6 +57,10 @@ export const sportsGetGame = tool('sports_get_game', {
       .describe(
         'Scoring plays requested per page. Defaults to 20; values above 50 are clipped and disclosed.',
       ),
+    sections: z
+      .array(GameSection)
+      .optional()
+      .describe('Detail sections to include. Omit for all sections or pass [] for metadata only.'),
   }),
   output: z.object({
     game: sportsGetScores.output.shape.games.element.describe(
@@ -170,7 +176,10 @@ export const sportsGetGame = tool('sports_get_game', {
       .number()
       .nullable()
       .describe('Zero-based last served event index, null for an empty page.'),
-    nextOffset: z.number().nullable().describe('Next scoring-play offset; null at the end.'),
+    nextOffset: z
+      .number()
+      .nullable()
+      .describe('Next scoring-play offset, null when there is no continuation.'),
     effectiveLimit: z.number().describe('Applied scoring-play page limit.'),
     truncationCeiling: z
       .number()
@@ -180,6 +189,15 @@ export const sportsGetGame = tool('sports_get_game', {
       .string()
       .optional()
       .describe('Explanation of unavailable scoring events, past-end offsets, or a clipped limit.'),
+    omittedSections: z
+      .array(GameSection)
+      .optional()
+      .describe('Sections excluded by the request and returned as empty arrays.'),
+  },
+  enrichmentTrailer: {
+    omittedSections: {
+      render: (sections) => (sections ? `**omittedSections:** ${sections.join(', ')}` : ''),
+    },
   },
   errors: [
     {
@@ -210,20 +228,29 @@ export const sportsGetGame = tool('sports_get_game', {
         : await getEspnService().getGame(route.espnSport, route.espnLeague, id, ctx);
     const totalCount = detail.scoringPlays.length;
     const effectiveLimit = Math.min(input.limit, 50);
-    const scoringPlays = detail.scoringPlays.slice(input.offset, input.offset + effectiveLimit);
+    const selected = new Set(input.sections ?? GameSection.options);
+    const omittedSections = GameSection.options.filter((section) => !selected.has(section));
+    const includesPlays = selected.has('scoringPlays');
+    const scoringPlays = includesPlays
+      ? detail.scoringPlays.slice(input.offset, input.offset + effectiveLimit)
+      : [];
     const nextOffset =
-      input.offset + scoringPlays.length < totalCount ? input.offset + scoringPlays.length : null;
+      includesPlays && input.offset + scoringPlays.length < totalCount
+        ? input.offset + scoringPlays.length
+        : null;
+    const clipped = includesPlays && input.limit > effectiveLimit;
     const notices: string[] = [];
-    if (input.limit > effectiveLimit)
-      notices.push(`Requested limit ${input.limit} was clipped to ${effectiveLimit}.`);
-    if (!totalCount)
-      notices.push(
-        'No scoring plays are available for this game; scheduled games have no played statistics.',
-      );
-    else if (!scoringPlays.length)
-      notices.push(
-        `Offset ${input.offset} is past the ${totalCount} available scoring plays. Use an offset below ${totalCount}.`,
-      );
+    if (includesPlays) {
+      if (clipped) notices.push(`Requested limit ${input.limit} was clipped to ${effectiveLimit}.`);
+      if (!totalCount)
+        notices.push(
+          'No scoring plays are available for this game; scheduled games have no played statistics.',
+        );
+      else if (!scoringPlays.length)
+        notices.push(
+          `Offset ${input.offset} is past the ${totalCount} available scoring plays. Use an offset below ${totalCount}.`,
+        );
+    }
     ctx.enrich({
       totalCount,
       offset: input.offset,
@@ -232,20 +259,24 @@ export const sportsGetGame = tool('sports_get_game', {
       servedTo: scoringPlays.length ? input.offset + scoringPlays.length - 1 : null,
       nextOffset,
       effectiveLimit,
-      ...(input.limit > effectiveLimit ? { truncationCeiling: 50 } : {}),
+      ...(clipped ? { truncationCeiling: effectiveLimit } : {}),
       ...(notices.length ? { notice: notices.join(' ') } : {}),
+      ...(omittedSections.length ? { omittedSections } : {}),
     });
-    return { ...detail, scoringPlays, league: input.league };
+    return {
+      game: detail.game,
+      league: input.league,
+      periodScores: selected.has('periodScores') ? detail.periodScores : [],
+      teamStats: selected.has('teamStats') ? detail.teamStats : [],
+      leaders: selected.has('leaders') ? detail.leaders : [],
+      scoringPlays,
+    };
   },
   format: (result) => {
-    // biome-ignore lint/style/noNonNullAssertion: The scores definition declares its formatter.
-    const lines = sportsGetScores.format!({
-      games: [result.game],
-      league: result.league,
-      date: result.game.startTimeUtc.slice(0, 10),
-    })
-      .map((block) => (block.type === 'text' ? block.text : ''))
-      .filter(Boolean);
+    const lines = [
+      inline`**${result.league.toUpperCase()} Game** (league: ${result.league})\n`,
+      ...formatGameRow(result.game, 'Period/Inning'),
+    ];
     lines.push('Period scores:');
     for (const period of result.periodScores)
       lines.push(

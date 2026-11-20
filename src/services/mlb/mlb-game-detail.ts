@@ -2,7 +2,7 @@
  * @fileoverview MLB live-feed game statistics, provider performers, and scoring plays.
  * @module services/mlb/mlb-game-detail
  */
-import { serviceUnavailable } from '@cyanheads/mcp-ts-core/errors';
+import { notFound, serviceUnavailable } from '@cyanheads/mcp-ts-core/errors';
 import type { GameDetail, GamePerson, GameTeam } from '../types.js';
 
 type Raw = Record<string, unknown>;
@@ -67,6 +67,13 @@ export function normalizeMlbGameDetail(payload: unknown, gamePk: string): GameDe
   const datetime = object(meta.datetime);
   const status = object(meta.status);
   if (
+    data.gamePk === 0 &&
+    object(meta.game).pk === 0 &&
+    status.codedGameState === 'X' &&
+    status.detailedState === 'Unknown'
+  )
+    throw notFound('No MLB game exists for this ID.', { reason: 'game_not_found' });
+  if (
     String(data.gamePk ?? '') !== gamePk ||
     home.id == null ||
     away.id == null ||
@@ -82,6 +89,7 @@ export function normalizeMlbGameDetail(payload: unknown, gamePk: string): GameDe
       shortName: `${away.abbreviation ?? ''} @ ${home.abbreviation ?? ''}`,
       homeTeam: { ...team(home), score: display(object(totals.home).runs) },
       awayTeam: { ...team(away), score: display(object(totals.away).runs) },
+      statusDetail: typeof status.detailedState === 'string' ? status.detailedState : null,
       status: String(status.detailedState).includes('Postponed')
         ? 'postponed'
         : String(status.detailedState).includes('Cancelled')

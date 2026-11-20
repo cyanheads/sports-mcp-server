@@ -4,7 +4,7 @@ description: Use with sports_* tools for complete fixture ranges, game recaps, s
 license: Apache-2.0
 metadata:
   author: "cyanheads"
-  version: "1.0"
+  version: "1.1"
 ---
 
 ## Scope
@@ -36,7 +36,7 @@ Resolve an unclear team identity first. Score filters match substrings on the ac
 
 Use `sports_get_schedule` for the requested period rather than treating the recent-results list in `sports_get_team` as complete history. Follow each game-page continuation with unchanged bounds, then advance to the returned next date window while retaining the original requested end. Continue even when an acquired window has no games.
 
-Collect the returned game IDs with their leagues. For a detailed recap, follow completed games into `sports_get_game`; its scoring-play pages repeat metadata and team totals, so combine the plays without summing those repeated sections.
+Collect each game ID with its league and call `sports_get_game` for the recap. Take team totals from the first page. For each continuation, pass `nextOffset` as `offset` with `sections: ["scoringPlays"]` and append the returned plays. Check `omittedSections` before interpreting an empty array as missing provider data.
 
 ### From a game performer to a biography
 

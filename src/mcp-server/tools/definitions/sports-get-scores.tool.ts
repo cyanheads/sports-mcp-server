@@ -8,6 +8,7 @@ import { easternToday } from '@/services/date-window.js';
 import { getEspnService } from '@/services/espn/espn-service.js';
 import { getMlbService } from '@/services/mlb/mlb-service.js';
 import { LEAGUE_ROUTES } from '@/services/types.js';
+import { formatGameRow } from '../format-game-row.js';
 import { inline } from '../formatting.js';
 
 const LEAGUE_ENUM = z.enum([
@@ -102,6 +103,10 @@ export const sportsGetScores = tool('sports_get_scores', {
             status: z
               .enum(['scheduled', 'in-progress', 'final', 'postponed', 'cancelled'])
               .describe('Game status.'),
+            statusDetail: z
+              .string()
+              .nullable()
+              .describe('Provider status detail, null if unavailable.'),
             period: z
               .number()
               .nullable()
@@ -231,18 +236,7 @@ export const sportsGetScores = tool('sports_get_scores', {
     if (result.reason) lines.push(inline`_${result.reason}_`);
 
     for (const g of result.games) {
-      const periodStr = g.period != null ? ` | Period/Inning: ${g.period}` : '';
-      const clockStr = g.clock ? ` | Clock: ${g.clock}` : '';
-      lines.push(inline`**${g.shortName}** [${g.id}] — ${g.status}${periodStr}${clockStr}`);
-      lines.push(
-        inline`  Away: ${g.awayTeam.name} (${g.awayTeam.abbreviation}) [${g.awayTeam.id}] — ${g.awayTeam.score ?? '—'}`,
-      );
-      lines.push(
-        inline`  Home: ${g.homeTeam.name} (${g.homeTeam.abbreviation}) [${g.homeTeam.id}] — ${g.homeTeam.score ?? '—'}`,
-      );
-      lines.push(
-        inline`  Start: ${g.startTimeUtc} | Venue: ${g.venue ?? 'N/A'} | Source: ${g.source}`,
-      );
+      lines.push(...formatGameRow(g, 'Period/Inning'));
     }
 
     return [{ type: 'text' as const, text: lines.join('\n') }];
