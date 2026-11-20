@@ -13,6 +13,9 @@ describe('bundle agent docs', () => {
     'node_modules/example/.claude/skills/a/SKILL.md',
     'node_modules/example/.agents/skills/a/SKILL.md',
     'node_modules/example/SKILL.md',
+    'node_modules/example/dist/SKILL.md',
+    'node_modules/example/AGENTS.md',
+    'node_modules/a/node_modules/@scope/example/CLAUDE.md',
     'node_modules/a/node_modules/@scope/example/skills/guide/SKILL.md',
   ])('strips package-root agent docs: %s', (entry) => {
     expect(cleanerPattern.test(entry)).toBe(true);
@@ -24,7 +27,7 @@ describe('bundle agent docs', () => {
     'node_modules/@modelcontextprotocol/server/dist/ext/skills/loaders.js',
     'node_modules/a/node_modules/@modelcontextprotocol/server/dist/ext/skills/index.js',
     'skills/sports-guide/SKILL.md',
-    'node_modules/example/dist/SKILL.md',
+    'node_modules/@scope/skills/index.js',
   ])('preserves runtime modules and published skills: %s', (entry) => {
     expect(cleanerPattern.test(entry)).toBe(false);
     expect(lintPattern.test(entry)).toBe(false);
